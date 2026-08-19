@@ -1,0 +1,215 @@
+:root {
+  --gpv-border: #d0d7de;
+  --gpv-bg: #ffffff;
+  --gpv-toolbar-bg: #f6f8fa;
+  --gpv-text: #24292f;
+  --gpv-muted: #57606a;
+  --gpv-accent: #0969da;
+  --gpv-page-bg: #ffffff;
+  --gpv-canvas-area-bg: #e9e9ea;
+  --gpv-radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gpv-border: #30363d;
+    --gpv-bg: #22272e;
+    --gpv-toolbar-bg: #2d333b;
+    --gpv-text: #cdd9e5;
+    --gpv-muted: #909dab;
+    --gpv-accent: #6cb6ff;
+    --gpv-page-bg: #e9e9ea;
+    --gpv-canvas-area-bg: #1c2128;
+  }
+}
+
+html[data-bs-theme='dark'] {
+  --gpv-border: #30363d;
+  --gpv-bg: #22272e;
+  --gpv-toolbar-bg: #2d333b;
+  --gpv-text: #cdd9e5;
+  --gpv-muted: #909dab;
+  --gpv-accent: #6cb6ff;
+  --gpv-page-bg: #e9e9ea;
+  --gpv-canvas-area-bg: #1c2128;
+}
+
+/* ---- link + toggle ---- */
+
+a.gpv-pdf-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--gpv-accent);
+}
+
+.gpv-pdf-icon {
+  flex: none;
+}
+
+.gpv-toggle-btn {
+  margin-left: 8px;
+  font-size: 0.8em;
+  border: 1px solid var(--gpv-border);
+  background: var(--gpv-bg);
+  color: var(--gpv-text);
+  border-radius: var(--gpv-radius);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.gpv-toggle-btn:hover {
+  background: var(--gpv-toolbar-bg);
+}
+
+/* ---- viewer container ---- */
+
+.gpv-inline-viewer {
+  margin: 12px 0 20px;
+  border: 1px solid var(--gpv-border);
+  border-radius: var(--gpv-radius);
+  overflow: hidden;
+  background: var(--gpv-canvas-area-bg);
+}
+
+.gpv-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--gpv-toolbar-bg);
+  border-bottom: 1px solid var(--gpv-border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.gpv-title {
+  flex: 1;
+  min-width: 80px;
+  font-size: 0.8em;
+  color: var(--gpv-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gpv-btn {
+  border: 1px solid var(--gpv-border);
+  background: var(--gpv-bg);
+  color: var(--gpv-text);
+  border-radius: var(--gpv-radius);
+  padding: 3px 9px;
+  cursor: pointer;
+  font-size: 0.8em;
+  text-decoration: none;
+}
+
+.gpv-btn:hover {
+  background: var(--gpv-toolbar-bg);
+}
+
+.gpv-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.gpv-page-indicator,
+.gpv-zoom-indicator {
+  font-size: 0.8em;
+  color: var(--gpv-text);
+  min-width: 3em;
+  text-align: center;
+}
+
+.gpv-page-input {
+  width: 4em;
+  border: 1px solid var(--gpv-border);
+  background: var(--gpv-bg);
+  color: var(--gpv-text);
+  border-radius: var(--gpv-radius);
+  padding: 3px 6px;
+  font-size: 0.8em;
+}
+
+/* ---- pages ---- */
+
+.gpv-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+
+.gpv-page-placeholder {
+  position: relative;
+  background: var(--gpv-page-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  width: 100%;
+}
+
+.gpv-page-placeholder canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.gpv-status {
+  font-size: 0.9em;
+  color: var(--gpv-muted);
+  padding: 20px;
+  text-align: center;
+}
+
+.gpv-error-link {
+  color: var(--gpv-accent);
+}
+
+/* ---- text layer (adapted from pdf.js text_layer_builder.css) ---- */
+
+.gpv-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-align: initial;
+  opacity: 1;
+  z-index: 1;
+}
+
+.gpv-text-layer span,
+.gpv-text-layer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+}
+
+.gpv-text-layer ::selection {
+  background: rgba(0, 100, 255, 0.3);
+}
+
+/* ---- print ---- */
+
+@media print {
+  .gpv-toggle-btn {
+    display: none;
+  }
+
+  .gpv-toolbar {
+    display: none;
+  }
+
+  .gpv-inline-viewer {
+    border: none;
+    background: none;
+  }
+
+  .gpv-page-placeholder {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
