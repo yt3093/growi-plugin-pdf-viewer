@@ -22,7 +22,7 @@ function debounce(fn: () => void, wait: number): () => void {
   };
 }
 
-export function createInlineViewer({ url, title, anchorEl }: InlineViewerOptions): InlineViewerHandle {
+export function createInlineViewer({ url, title, anchorEl, onRequestClose }: InlineViewerOptions): InlineViewerHandle {
   let container: HTMLDivElement | null = null;
   let loadingTask: PDFDocumentLoadingTask | null = null;
   let pdfDoc: PDFDocumentProxy | null = null;
@@ -114,6 +114,16 @@ export function createInlineViewer({ url, title, anchorEl }: InlineViewerOptions
     downloadLink.href = url;
     downloadLink.download = title || '';
     toolbar.appendChild(downloadLink);
+
+    // The toolbar is sticky, so this stays reachable even after scrolling
+    // past the original toggle button that opened the viewer.
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'gpv-btn gpv-close-btn';
+    closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'PDFを閉じる');
+    closeBtn.addEventListener('click', () => onRequestClose());
+    toolbar.appendChild(closeBtn);
 
     updateZoomIndicator();
 
@@ -268,6 +278,12 @@ export function createInlineViewer({ url, title, anchorEl }: InlineViewerOptions
         placeholder.className = 'gpv-page-placeholder';
         placeholder.dataset.gpvPage = String(n);
         placeholder.setAttribute('aria-label', `ページ ${n}`);
+        // Shown until renderPage() clears it and inserts the canvas, so a
+        // page waiting for IntersectionObserver to reach it doesn't read as
+        // a blank/broken area while scrolling.
+        const spinner = document.createElement('div');
+        spinner.className = 'gpv-page-spinner';
+        placeholder.appendChild(spinner);
         pagesEl.appendChild(placeholder);
         pages.set(n, { placeholder, canvas: null, textLayerEl: null, renderTask: null, rendered: false });
       }

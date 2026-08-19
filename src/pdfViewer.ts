@@ -74,19 +74,28 @@ function isEligibleLink(link: HTMLAnchorElement): boolean {
 
 // ---- enhance / restore ----
 
+function closeViewer(state: EnhancedLink): void {
+  if (!state.viewer) return;
+  state.viewer.collapse();
+  state.viewer = null;
+  state.toggleBtn.textContent = 'PDFを表示';
+  state.toggleBtn.setAttribute('aria-expanded', 'false');
+}
+
 function toggleViewer(state: EnhancedLink): void {
   if (state.viewer) {
-    state.viewer.collapse();
-    state.viewer = null;
-    state.toggleBtn.textContent = 'PDFを表示';
-    state.toggleBtn.setAttribute('aria-expanded', 'false');
+    closeViewer(state);
     return;
   }
 
+  // The viewer's own toolbar also has a close button (visible even after
+  // scrolling past this toggle), so it needs a way to trigger the same
+  // close path and keep this button's label/aria-expanded in sync.
   const viewer = createInlineViewer({
     url: state.link.href,
     title: state.link.textContent?.trim() ?? '',
     anchorEl: state.toggleBtn,
+    onRequestClose: () => closeViewer(state),
   });
   state.viewer = viewer;
   state.toggleBtn.textContent = 'PDFを閉じる';

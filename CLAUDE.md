@@ -20,6 +20,8 @@
 | ダウンロード | ツールバーに元の添付 URL への `download` リンクを設置 |
 | テキスト選択・コピー | pdf.js の `TextLayer` を canvas に重ねて配置し、文字選択・コピーを可能にする |
 | 複数同時展開 | 同一ページ内の複数 PDF リンクは、それぞれ独立してビューアを持ち同時展開できる |
+| ツールバー内クローズボタン | `.gpv-toolbar` は `position: sticky` で追従するため、外側の「PDFを表示/閉じる」トグルがスクロールで画面外に出た後でも、ツールバー右端の ✕ ボタンから閉じられる。押すと `onRequestClose` 経由で外側トグルの表示（テキスト/`aria-expanded`）も同期する |
+| ページ読み込みスピナー | 未描画のページプレースホルダーに回転スピナーを表示し、`renderPage()` が最初に呼ばれた時点（canvas 挿入時）で消える。`prefers-reduced-motion: reduce` では回転を止める |
 | CORS フォールバック | pdf.js の `fetch` が失敗（CORS 等）した場合、`<iframe src="元のURL">` によるブラウザ標準 PDF 表示にフォールバックする。ズーム/ページジャンプ/テキスト選択は使えないが「見られない」状態は回避する |
 | DOM 復元 | `unmount()` 時にアイコン・トグルボタン・enhanced マーカー・付与クラスを全て除去し元の `<a>` に戻す |
 | SPA 遷移 | `pushState` / `replaceState` モンキーパッチ + `popstate` + `hashchange` で再スキャン（フルスキャン） |
@@ -244,6 +246,24 @@ Vite 5+ では `vite.config.ts` で `build.manifest: 'manifest.json'` を明示�
 値を変更すると、OS のダークモードと GROWI のダークモードトグルとで配色が食い違う不具合になる。配色を
 変更する際は必ず両方のブロックを同時に更新すること。
 
+### 14. 親要素の `overflow: hidden` が子要素の `position: sticky` を壊す
+
+`.gpv-inline-viewer`（角丸の外枠をクリップする目的で `overflow: hidden` を付けていた）の直接の子である
+`.gpv-toolbar` に `position: sticky; top: 0;` を指定しても、**ページをスクロールしてもツールバーが追従しない**
+不具合が発生した。
+
+原因: `overflow` が `visible` 以外の値（`hidden` / `scroll` / `auto` / `clip`）を持つ要素は、たとえ実際には
+スクロールしない（コンテンツが自身の高さに収まっている）としても CSS 上は「スクロールコンテナ」として扱われ、
+子孫の `position: sticky` はドキュメント全体のビューポートではなくその要素基準で計算されてしまう。
+`.gpv-inline-viewer` は高さがコンテンツに自動フィットしており実際にはスクロールしないため、sticky 要素は
+「stick すべき相対的なスクロール量」を得られず、常に静的な位置のまま親と一緒に流れてしまっていた。
+
+対応: `.gpv-inline-viewer` から `overflow: hidden` を削除し、角丸のクリップは `.gpv-toolbar` に
+`border-radius: var(--gpv-radius) var(--gpv-radius) 0 0`（上2隅）、`.gpv-fallback-iframe` に
+`border-radius: 0 0 var(--gpv-radius) var(--gpv-radius)`（下2隅）を個別に指定する形に変更した。
+今後 `.gpv-inline-viewer` 配下に `position: sticky` な要素を追加する場合、祖先に `overflow: hidden` 等を
+安易に付けないこと。
+
 ### 命名規約
 
 | 対象 | 値 |
@@ -291,6 +311,9 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 10. PDF 内のテキストを選択・コピーできる
 11. 「PDFを閉じる」で描画済み内容が破棄されビューアが折りたたまれる
 12. 同一ページ内の複数 PDF リンクを同時に展開できる
+12a. 長い PDF を下までスクロールしてもツールバーが追従し、ツールバー右端の ✕ ボタンで閉じられる。押すと
+    外側の「PDFを表示」トグルの表示も同期して戻る
+12b. 未描画のページにスピナーが表示され、`IntersectionObserver` で描画され次第消える
 13. 編集モードへ遷移するとトグル UI が消え元の `<a>` に戻る。編集モードから戻ると再度ボタンが付く
 14. SPA 遷移後の新ページの PDF リンクも自動検出される
 15. `/admin` 配下では変換が行われない

@@ -18,4 +18,5 @@ export interface InlineViewerOptions {
   url: string;
   title: string;
   anchorEl: HTMLElement;
+  onRequestClose: () => void;
 }
