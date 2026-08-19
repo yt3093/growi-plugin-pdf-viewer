@@ -103,6 +103,13 @@ function toggleViewer(state: EnhancedLink): void {
   void viewer.expand();
 }
 
+// The block-level element the link's text visually belongs to (its
+// paragraph/list item/table cell/...), so the toggle button can be placed
+// below that whole block instead of squeezed inline right after the link.
+function findBlockContainer(link: HTMLAnchorElement): Element {
+  return link.closest('p, li, td, th, dd, dt, blockquote') ?? link.parentElement ?? link;
+}
+
 function enhanceLink(link: HTMLAnchorElement): void {
   link.setAttribute(ENHANCED_ATTR, 'true');
   link.classList.add('gpv-pdf-link');
@@ -115,7 +122,7 @@ function enhanceLink(link: HTMLAnchorElement): void {
   toggleBtn.className = 'gpv-toggle-btn';
   toggleBtn.textContent = 'PDFを表示';
   toggleBtn.setAttribute('aria-expanded', 'false');
-  link.insertAdjacentElement('afterend', toggleBtn);
+  findBlockContainer(link).insertAdjacentElement('afterend', toggleBtn);
 
   const state: EnhancedLink = { link, icon, toggleBtn, clickHandler: () => {}, viewer: null };
 

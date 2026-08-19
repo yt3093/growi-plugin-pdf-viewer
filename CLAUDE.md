@@ -74,8 +74,12 @@ growi-plugin-pdf-viewer/
   - リンクテキスト（`link.textContent.trim()`）が `.pdf`（大小文字無視）で終わる
   - `isInEditorDOM(link)` が false（`.CodeMirror` / `.cm-editor` / `[contenteditable="true"]` 配下でない）
 - **`enhanceLink(link)`**: リンクに `gpv-pdf-link` クラスと SVG アイコン（`createElementNS` で生成、`innerHTML`
-  不使用）を追加し、直後に「PDFを表示」トグルボタンを挿入する。リンク自体のクリックは `preventDefault` して
+  不使用）を追加し、「PDFを表示」トグルボタンを挿入する。リンク自体のクリックは `preventDefault` して
   トグルボタンのクリックに委譲する（ダウンロード/別タブ遷移をさせないため）。
+- **`findBlockContainer(link)`**: トグルボタンの挿入位置を決める。`link.closest('p, li, td, th, dd, dt,
+  blockquote')`（無ければ `link.parentElement`）でリンクの文章が属するブロック要素を求め、そのブロックの
+  直後（`insertAdjacentElement('afterend', ...)`）にボタンを置く。これにより、ボタンは文中のリンクのすぐ
+  右ではなく、**段落など「枠」全体の下に新しい行として**現れる。
 - **`toggleViewer(state)`**: 初回クリックで `createInlineViewer()` を呼び `viewer.expand()`、再クリックで
   `viewer.collapse()` して `state.viewer` を null に戻す。ボタンのラベルと `aria-expanded` を同期させる。
 - **`restoreLink(state)`**: 開いていればまず `viewer.collapse()`、次に click リスナ解除・アイコン/トグルボタン
