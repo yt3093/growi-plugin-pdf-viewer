@@ -163,8 +163,20 @@ a.gpv-pdf-link {
   text-align: center;
 }
 
-.gpv-error-link {
-  color: var(--gpv-accent);
+.gpv-fallback-notice {
+  font-size: 0.8em;
+  color: var(--gpv-muted);
+  padding: 6px 10px;
+  background: var(--gpv-toolbar-bg);
+  border-bottom: 1px solid var(--gpv-border);
+}
+
+.gpv-fallback-iframe {
+  display: block;
+  width: 100%;
+  height: 80vh;
+  border: none;
+  background: var(--gpv-page-bg);
 }
 
 /* ---- text layer (adapted from pdf.js text_layer_builder.css) ---- */
@@ -211,5 +223,9 @@ a.gpv-pdf-link {
   .gpv-page-placeholder {
     box-shadow: none;
     break-inside: avoid;
+  }
+
+  .gpv-fallback-notice {
+    display: none;
   }
 }

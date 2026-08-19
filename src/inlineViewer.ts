@@ -65,13 +65,13 @@ export function createInlineViewer({ url, title, anchorEl }: InlineViewerOptions
     toolbar.appendChild(titleEl);
 
     pageIndicatorEl = document.createElement('span');
-    pageIndicatorEl.className = 'gpv-page-indicator';
+    pageIndicatorEl.className = 'gpv-page-indicator gpv-pdfjs-only';
     pageIndicatorEl.textContent = '- / -';
     toolbar.appendChild(pageIndicatorEl);
 
     pageInputEl = document.createElement('input');
     pageInputEl.type = 'number';
-    pageInputEl.className = 'gpv-page-input';
+    pageInputEl.className = 'gpv-page-input gpv-pdfjs-only';
     pageInputEl.min = '1';
     pageInputEl.setAttribute('aria-label', 'ページ番号を指定して移動');
     pageInputEl.addEventListener('keydown', (event) => {
@@ -83,26 +83,26 @@ export function createInlineViewer({ url, title, anchorEl }: InlineViewerOptions
 
     const jumpBtn = document.createElement('button');
     jumpBtn.type = 'button';
-    jumpBtn.className = 'gpv-btn';
+    jumpBtn.className = 'gpv-btn gpv-pdfjs-only';
     jumpBtn.textContent = '移動';
     jumpBtn.addEventListener('click', () => jumpToPage(Number(pageInputEl?.value)));
     toolbar.appendChild(jumpBtn);
 
     zoomOutBtn = document.createElement('button');
     zoomOutBtn.type = 'button';
-    zoomOutBtn.className = 'gpv-btn';
+    zoomOutBtn.className = 'gpv-btn gpv-pdfjs-only';
     zoomOutBtn.textContent = '−';
     zoomOutBtn.setAttribute('aria-label', '縮小');
     zoomOutBtn.addEventListener('click', () => changeZoom(-1));
     toolbar.appendChild(zoomOutBtn);
 
     zoomIndicatorEl = document.createElement('span');
-    zoomIndicatorEl.className = 'gpv-zoom-indicator';
+    zoomIndicatorEl.className = 'gpv-zoom-indicator gpv-pdfjs-only';
     toolbar.appendChild(zoomIndicatorEl);
 
     zoomInBtn = document.createElement('button');
     zoomInBtn.type = 'button';
-    zoomInBtn.className = 'gpv-btn';
+    zoomInBtn.className = 'gpv-btn gpv-pdfjs-only';
     zoomInBtn.textContent = '+';
     zoomInBtn.setAttribute('aria-label', '拡大');
     zoomInBtn.addEventListener('click', () => changeZoom(1));
@@ -212,14 +212,30 @@ export function createInlineViewer({ url, title, anchorEl }: InlineViewerOptions
     });
   }
 
-  function showError(status: HTMLDivElement): void {
-    status.textContent = 'PDFを読み込めませんでした。';
-    status.appendChild(document.createElement('br'));
-    const link = document.createElement('a');
-    link.href = url;
-    link.textContent = '元のファイルをダウンロード';
-    link.className = 'gpv-error-link';
-    status.appendChild(link);
+  // pdf.js reads the response body via fetch, which is blocked when the
+  // storage backend (e.g. GCS/S3 redirect mode) doesn't send CORS headers
+  // for the wiki origin. An <iframe> only needs the browser to *display*
+  // the resource, which isn't subject to that restriction, so it still
+  // works when the pdf.js fetch path doesn't.
+  function showFallback(status: HTMLDivElement): void {
+    if (!container) return;
+    status.remove();
+
+    container.querySelectorAll<HTMLElement>('.gpv-pdfjs-only').forEach((el) => {
+      el.style.display = 'none';
+    });
+
+    const notice = document.createElement('div');
+    notice.className = 'gpv-fallback-notice';
+    notice.textContent =
+      'この環境では簡易表示のみ利用できます（ズーム・ページ移動・テキスト選択は使用できません）。';
+    container.appendChild(notice);
+
+    const iframe = document.createElement('iframe');
+    iframe.className = 'gpv-fallback-iframe';
+    iframe.src = url;
+    iframe.title = title;
+    container.appendChild(iframe);
   }
 
   async function expand(): Promise<void> {
@@ -277,7 +293,7 @@ export function createInlineViewer({ url, title, anchorEl }: InlineViewerOptions
       }, 200);
       window.addEventListener('resize', resizeHandler);
     } catch {
-      showError(status);
+      showFallback(status);
     }
   }
 

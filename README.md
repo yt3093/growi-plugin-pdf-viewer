@@ -41,10 +41,12 @@ GROWI の添付ファイル機能で PDF をアップロードすると、本文
 
 ### 既知の制約
 
-- GROWI が Amazon S3 / Google Cloud Storage を Redirect Mode で利用している構成では、`/attachment/:id` への
-  アクセスが署名付き URL への 302 リダイレクトになる場合があります。バケット側に wiki のオリジンを許可する
-  CORS 設定がないと、pdf.js の `fetch` が失敗し「PDFを読み込めませんでした」というエラー表示になります。
-  ローカルストレージ構成（同一オリジン）では問題ありません。
+- GROWI が Amazon S3 / Google Cloud Storage を Redirect Mode で利用している構成（**GROWI Cloud を含む**）
+  では、`/attachment/:id` へのアクセスが署名付き URL への 302 リダイレクトになります。バケット側に wiki の
+  オリジンを許可する CORS 設定がないと pdf.js の `fetch` が失敗するため、その場合はズーム・ページジャンプ・
+  テキスト選択のできない**簡易表示（ブラウザ標準の PDF ビューアを `<iframe>` で埋め込み）**に自動的に
+  フォールバックします。ローカルストレージ構成（同一オリジン）や CORS 設定済みのバケットでは、このフォール
+  バックは発生せず通常どおり pdf.js のビューアが使えます。
 
 ## インストール
 
