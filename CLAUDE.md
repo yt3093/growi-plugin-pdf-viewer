@@ -12,7 +12,7 @@
 | 機能 | 説明 |
 |---|---|
 | リンク検出 | `href` が `/attachment/` から始まり、かつリンクテキスト（ファイル名）が `.pdf` で終わる `<a>` のみを対象にする |
-| トグル UI | 対象リンクにアイコン＋「PDFを表示」ボタンを付与。押すとリンク直後にビューアを展開、再度押すと閉じる |
+| トグル UI | 対象リンクにアイコン＋「View PDF」ボタンを付与。押すとリンク直後にビューアを展開、再度押すと閉じる |
 | インライン展開 | モーダルではなく本文の流れの中にビューアを挿入する方式 |
 | 遅延描画 | 全ページ分のプレースホルダーを先に並べ、`IntersectionObserver` で可視ページに近づいたものだけ canvas 描画する |
 | ズーム | ツールバーのボタンで拡大/縮小。プレースホルダー高さと描画済みページを再計算・再描画する |
@@ -20,7 +20,7 @@
 | ダウンロード | ツールバーに元の添付 URL への `download` リンクを設置 |
 | テキスト選択・コピー | pdf.js の `TextLayer` を canvas に重ねて配置し、文字選択・コピーを可能にする |
 | 複数同時展開 | 同一ページ内の複数 PDF リンクは、それぞれ独立してビューアを持ち同時展開できる |
-| ツールバー内クローズボタン | `.gpv-toolbar` は `position: sticky` で追従するため、外側の「PDFを表示/閉じる」トグルがスクロールで画面外に出た後でも、ツールバー右端の ✕ ボタンから閉じられる。押すと `onRequestClose` 経由で外側トグルの表示（テキスト/`aria-expanded`）も同期する |
+| ツールバー内クローズボタン | `.gpv-toolbar` は `position: sticky` で追従するため、外側の「View PDF / Close PDF」トグルがスクロールで画面外に出た後でも、ツールバー右端の ✕ ボタンから閉じられる。押すと `onRequestClose` 経由で外側トグルの表示（テキスト/`aria-expanded`）も同期する |
 | ページ読み込みスピナー | 未描画のページプレースホルダーに回転スピナーを表示し、`renderPage()` が最初に呼ばれた時点（canvas 挿入時）で消える。`prefers-reduced-motion: reduce` では回転を止める |
 | CORS フォールバック | pdf.js の `fetch` が失敗（CORS 等）した場合、`<iframe src="元のURL">` によるブラウザ標準 PDF 表示にフォールバックする。ズーム/ページジャンプ/テキスト選択は使えないが「見られない」状態は回避する |
 | DOM 復元 | `unmount()` 時にアイコン・トグルボタン・enhanced マーカー・付与クラスを全て除去し元の `<a>` に戻す |
@@ -30,6 +30,8 @@
 | 非実行条件 | 編集モード（`/edit`, `#edit`, `body.editing`, `body.grw-editor-mode`, `body.modal-open`）・管理画面（`/admin`）では実行しない |
 | ダークモード | `@media (prefers-color-scheme: dark)` と `html[data-bs-theme="dark"]`（Bootstrap 5.3 GROWI UI トグル）の双方で配色を切り替える（2 箇所は値を同期させること） |
 | 印刷対応 | `@media print` でツールバー等の操作 UI を非表示にする |
+| アイコンツールバー | ページ移動/ズーム/ダウンロード/閉じるを全て `title`/`aria-label` 付きのアイコンボタンに統一し、日本語テキストと英語トグル文言の混在を解消 |
+| 展開アニメーション | `.gpv-inline-viewer` の `opacity`/`transform` トランジションで滑らかに展開・折りたたみ。`prefers-reduced-motion: reduce` では無効化 |
 
 ## アーキテクチャ
 
@@ -74,8 +76,13 @@ growi-plugin-pdf-viewer/
   - リンクテキスト（`link.textContent.trim()`）が `.pdf`（大小文字無視）で終わる
   - `isInEditorDOM(link)` が false（`.CodeMirror` / `.cm-editor` / `[contenteditable="true"]` 配下でない）
 - **`enhanceLink(link)`**: リンクに `gpv-pdf-link` クラスと SVG アイコン（`createElementNS` で生成、`innerHTML`
-  不使用）を追加し、「PDFを表示」トグルボタンを挿入する。リンク自体のクリックは `preventDefault` して
+  不使用）を追加し、トグルボタンを挿入する。リンク自体のクリックは `preventDefault` して
   トグルボタンのクリックに委譲する（ダウンロード/別タブ遷移をさせないため）。
+  トグルボタン自体も `createPdfIcon()`（`.gpv-toggle-icon`）＋ `span.gpv-toggle-label`（初期値 `View PDF`）の
+  子要素構成にしている。ラベルは開閉のたびに丸ごと差し替えるのではなく `setToggleLabel()` が
+  `.gpv-toggle-label` の `textContent` だけを更新するので、アイコンを毎回作り直さずに済む。ボタン文言は
+  英語（`View PDF` / `Close PDF`）に統一している一方、ツールバー内の他の文言（ページ移動・ダウンロード等）は
+  日本語のまま残っており、UI 文言の言語は現時点で統一されていない。
 - **`findBlockContainer(link)`**: トグルボタンの挿入位置を決める。`link.closest('p, li, td, th, dd, dt,
   blockquote')`（無ければ `link.parentElement`）でリンクの文章が属するブロック要素を求め、そのブロックの
   直後（`insertAdjacentElement('afterend', ...)`）にボタンを置く。これにより、ボタンは文中のリンクのすぐ
@@ -89,9 +96,24 @@ growi-plugin-pdf-viewer/
 
 ### `createInlineViewer({ url, title, anchorEl })`（`src/inlineViewer.ts`）
 
-- **ツールバー**: タイトル表示、ページインジケータ、ページ番号入力＋「移動」ボタン、ズーム(−/%/+)、
-  ダウンロードリンク（`<a download>`、`href` は元の添付 URL）。すべて `createElement`/`createElementNS` で
-  生成し `innerHTML` は使わない。
+- **ツールバー**: タイトル表示、ページインジケータ、ページ番号入力＋移動アイコン、ズーム（縮小/％/拡大）、
+  ダウンロード、閉じる、を全て**アイコンボタン**（`.gpv-btn` = 28×28px、`title`/`aria-label` でツールチップ兼
+  アクセシブルネームを付与）で統一している。可視テキストが「移動」「ダウンロード」等の日本語と
+  トグルボタンの英語（`View PDF`）で混在するのを避けるため、テキストラベル自体を無くしアイコンのみにした。
+  アイコンは `createStrokeIcon()`（16×16, `stroke="currentColor"`）ベースの小さなヘルパー群
+  （`createJumpIcon` / `createZoomOutIcon` / `createZoomInIcon` / `createDownloadIcon` / `createCloseIcon`）
+  で生成し、`createToolbarSeparator()` でグループ間に区切り線を挟む。すべて `createElement`/`createElementNS`
+  で生成し `innerHTML` は使わない。
+- **展開/折りたたみのフェードイン**: `.gpv-inline-viewer` は `opacity: 0; transform: translateY(-6px);` を基準
+  状態とし、`.gpv-open` クラスで `opacity: 1; transform: translateY(0);` に遷移する（`transition:
+  opacity/transform`）。`expand()` は要素を DOM に追加した**直後は `.gpv-open` を付けず**、2 段の
+  `requestAnimationFrame` を挟んでから追加する（同一 tick で追加すると初期状態の描画がスキップされ
+  トランジションが発火しないことがあるため。message-notation の SPA 再スキャンで使っている 2 段 rAF と
+  同じ考え方）。`collapse()` は `.gpv-open` を外してから `transitionend`（または `CLOSE_TRANSITION_MS`
+  経過後のフォールバック `setTimeout`）で実際に DOM を除去する。**あえて `max-height` によるアコーディオン風
+  の高さアニメーションは採用していない**: 中身の高さは遅延描画・ズームで継続的に変わるため、`max-height` を
+  都度再計測し続ける実装は複雑さ・不具合リスクの割に効果が薄いと判断し、`opacity`/`transform` のみに絞った
+  （詳細はハマりどころ #15 参照）。
 - **`expand()`**:
   1. `getDocument({ url })` で `PDFDocumentLoadingTask` を取得し `.promise` を待つ（後述: `getDocument(url)` の
      ように文字列を直接渡す呼び方は v6 の型では通らない）
@@ -268,6 +290,33 @@ Vite 5+ では `vite.config.ts` で `build.manifest: 'manifest.json'` を明示�
 今後 `.gpv-inline-viewer` 配下に `position: sticky` な要素を追加する場合、祖先に `overflow: hidden` 等を
 安易に付けないこと。
 
+### 15. 展開アニメーションを `opacity`/`transform` に留め、`max-height` アコーディオンにしなかった理由
+
+見た目改善の一環で「展開/折りたたみをふわっとしたアニメーションにしたい」という要望があった際、素朴な実装
+（デモの HTML モックアップで最初に作った案）は `max-height: 0 → 十分大きな固定値` を `transition` させる
+アコーディオン風のものだった。しかし実装を進めると、本プラグインのビューアには次の性質があり、固定
+`max-height` や単純な `scrollHeight` 計測では長期的に破綻することが分かった。
+
+- 中身の高さは `expand()` 直後（「読み込み中…」の短い文言のみ）→ 全ページ分のプレースホルダーが並んだ直後
+  （ページ数 × プレースホルダー高さ、数千px になり得る）→ 各ページが遅延描画されるたびに実寸へ更新、という
+  具合に**開いた後も継続的に変化し続ける**
+- ズーム変更（`changeZoom`）でも既存ページの高さが再計算される
+- 上記のたびに `max-height` を再計測・再設定しないと、後から中身が伸びたときに古い `max-height` でクリップ
+  されてしまう。かといって都度計測すると、遅延描画のたびに `max-height` が動いてガタつく見た目になりかねない
+
+そのため、`max-height` によるクリップ/展開は行わず、**`opacity` + `transform: translateY()` のみ**を
+トランジションさせる方式にした。中身の高さがどう変化しても不整合が起きず、`.gpv-toolbar` の
+`position: sticky`（ハマりどころ #14）とも競合しない（`overflow: hidden` を必要としないため）。
+
+`collapse()` 側は `.gpv-open` を外した直後に `container` 変数を `null` にしてしまうため、実際の DOM 除去は
+`transitionend` イベント（複数プロパティが同時に transition している場合 `{ once: true }` で最初の1回だけ
+処理すれば十分）と、念のためのフォールバック `setTimeout(..., CLOSE_TRANSITION_MS)` の**どちらか早い方**で
+行っている。`remove()` は既に親を持たない要素に対して呼んでも何も起きない（例外にならない）ため、両方が
+発火しても問題ない。
+
+`prefers-reduced-motion: reduce` では `.gpv-inline-viewer` の `transition` を丸ごと無効化し、クラス切り替え
+自体は即座に反映されるようにしている（アニメーション抑制の設定を尊重しつつ機能は変わらない）。
+
 ### 命名規約
 
 | 対象 | 値 |
@@ -305,19 +354,23 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 
 1. `pnpm build` が成功し `dist/manifest.json` と `dist/assets/*` が出力される
 2. GROWI で削除 → 再インストール後、DevTools Network で `client-entry-*.js` が 200 で取得される
-3. `[report.pdf](/attachment/xxx)` 形式の添付リンクに「PDFを表示」ボタンが付く
+3. `[report.pdf](/attachment/xxx)` 形式の添付リンクに「View PDF」ボタンが付く
 4. 画像添付（`.png` 等）や `/attachment/` 配下でないリンクにはボタンが付かない
-5. 「PDFを表示」でリンク直後にビューアが展開され、pdf.js が描画する
+5. 「View PDF」でリンク直後にビューアが展開され、pdf.js が描画する
 6. スクロールに応じて未描画ページが遅延描画される（一括描画されない）
 7. ズーム（−/+）でページの拡大縮小と再描画が行われる
 8. ページ番号を入力して「移動」すると該当ページへスクロールする
 9. ダウンロードボタンで元の添付ファイルを取得できる
 10. PDF 内のテキストを選択・コピーできる
-11. 「PDFを閉じる」で描画済み内容が破棄されビューアが折りたたまれる
+11. 「Close PDF」で描画済み内容が破棄されビューアが折りたたまれる
 12. 同一ページ内の複数 PDF リンクを同時に展開できる
 12a. 長い PDF を下までスクロールしてもツールバーが追従し、ツールバー右端の ✕ ボタンで閉じられる。押すと
-    外側の「PDFを表示」トグルの表示も同期して戻る
+    外側の「View PDF」トグルの表示も同期して戻る
 12b. 未描画のページにスピナーが表示され、`IntersectionObserver` で描画され次第消える
+12c. ツールバーの全ボタン（移動・ズーム・ダウンロード・閉じる）がアイコン表示になっており、ホバーで
+    `title` のツールチップが出る
+12d. 「View PDF」を押すとビューアがふわっとフェード・スライドしながら展開し、閉じるときも滑らかに消える
+    （`prefers-reduced-motion` を有効にしている場合は瞬時に切り替わる）
 13. 編集モードへ遷移するとトグル UI が消え元の `<a>` に戻る。編集モードから戻ると再度ボタンが付く
 14. SPA 遷移後の新ページの PDF リンクも自動検出される
 15. `/admin` 配下では変換が行われない

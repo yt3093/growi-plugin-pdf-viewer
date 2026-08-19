@@ -48,19 +48,35 @@ a.gpv-pdf-link {
 }
 
 .gpv-toggle-btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 6px;
   font-size: 0.8em;
+  font-weight: 500;
   border: 1px solid var(--gpv-border);
   background: var(--gpv-bg);
   color: var(--gpv-text);
   border-radius: var(--gpv-radius);
-  padding: 2px 8px;
+  padding: 4px 10px;
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .gpv-toggle-btn:hover {
   background: var(--gpv-toolbar-bg);
+  border-color: var(--gpv-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.gpv-toggle-btn:focus-visible {
+  outline: 2px solid var(--gpv-accent);
+  outline-offset: 1px;
+}
+
+.gpv-toggle-icon {
+  flex: none;
+  color: var(--gpv-accent);
 }
 
 /* ---- viewer container ---- */
@@ -70,6 +86,20 @@ a.gpv-pdf-link {
   border: 1px solid var(--gpv-border);
   border-radius: var(--gpv-radius);
   background: var(--gpv-canvas-area-bg);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.gpv-inline-viewer.gpv-open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gpv-inline-viewer {
+    transition: none;
+  }
 }
 
 .gpv-toolbar {
@@ -97,23 +127,42 @@ a.gpv-pdf-link {
 }
 
 .gpv-btn {
-  border: 1px solid var(--gpv-border);
-  background: var(--gpv-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--gpv-text);
   border-radius: var(--gpv-radius);
-  padding: 3px 9px;
   cursor: pointer;
-  font-size: 0.8em;
   text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .gpv-btn:hover {
-  background: var(--gpv-toolbar-bg);
+  background: var(--gpv-bg);
+  border-color: var(--gpv-border);
+}
+
+.gpv-btn:focus-visible {
+  outline: 2px solid var(--gpv-accent);
+  outline-offset: 1px;
 }
 
 .gpv-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.gpv-toolbar-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--gpv-border);
+  margin: 0 4px;
 }
 
 .gpv-page-indicator,
@@ -125,18 +174,14 @@ a.gpv-pdf-link {
 }
 
 .gpv-page-input {
-  width: 4em;
+  width: 3.6em;
   border: 1px solid var(--gpv-border);
   background: var(--gpv-bg);
   color: var(--gpv-text);
   border-radius: var(--gpv-radius);
   padding: 3px 6px;
   font-size: 0.8em;
-}
-
-.gpv-close-btn {
-  font-weight: bold;
-  line-height: 1;
+  text-align: center;
 }
 
 /* ---- pages ---- */
@@ -250,6 +295,8 @@ a.gpv-pdf-link {
   .gpv-inline-viewer {
     border: none;
     background: none;
+    opacity: 1;
+    transform: none;
   }
 
   .gpv-page-spinner {

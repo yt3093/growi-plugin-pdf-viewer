@@ -74,11 +74,16 @@ function isEligibleLink(link: HTMLAnchorElement): boolean {
 
 // ---- enhance / restore ----
 
+function setToggleLabel(toggleBtn: HTMLButtonElement, label: string): void {
+  const labelEl = toggleBtn.querySelector('.gpv-toggle-label');
+  if (labelEl) labelEl.textContent = label;
+}
+
 function closeViewer(state: EnhancedLink): void {
   if (!state.viewer) return;
   state.viewer.collapse();
   state.viewer = null;
-  state.toggleBtn.textContent = 'PDFを表示';
+  setToggleLabel(state.toggleBtn, 'View PDF');
   state.toggleBtn.setAttribute('aria-expanded', 'false');
 }
 
@@ -98,7 +103,7 @@ function toggleViewer(state: EnhancedLink): void {
     onRequestClose: () => closeViewer(state),
   });
   state.viewer = viewer;
-  state.toggleBtn.textContent = 'PDFを閉じる';
+  setToggleLabel(state.toggleBtn, 'Close PDF');
   state.toggleBtn.setAttribute('aria-expanded', 'true');
   void viewer.expand();
 }
@@ -120,8 +125,17 @@ function enhanceLink(link: HTMLAnchorElement): void {
   const toggleBtn = document.createElement('button');
   toggleBtn.type = 'button';
   toggleBtn.className = 'gpv-toggle-btn';
-  toggleBtn.textContent = 'PDFを表示';
   toggleBtn.setAttribute('aria-expanded', 'false');
+
+  const toggleIcon = createPdfIcon();
+  toggleIcon.classList.add('gpv-toggle-icon');
+  toggleBtn.appendChild(toggleIcon);
+
+  const toggleLabel = document.createElement('span');
+  toggleLabel.className = 'gpv-toggle-label';
+  toggleLabel.textContent = 'View PDF';
+  toggleBtn.appendChild(toggleLabel);
+
   findBlockContainer(link).insertAdjacentElement('afterend', toggleBtn);
 
   const state: EnhancedLink = { link, icon, toggleBtn, clickHandler: () => {}, viewer: null };

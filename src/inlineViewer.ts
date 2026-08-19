@@ -5,6 +5,79 @@ import type { InlineViewerHandle, InlineViewerOptions } from './types';
 const ZOOM_STEPS = [0.6, 0.8, 1.0, 1.25, 1.5, 2.0];
 const DEFAULT_ZOOM_INDEX = 2;
 const CURRENT_PAGE_THRESHOLD = 0.5;
+const SVG_NS = 'http://www.w3.org/2000/svg';
+// Matches .gpv-inline-viewer's opacity/transform transition duration; used
+// as a fallback removal timer in case transitionend doesn't fire.
+const CLOSE_TRANSITION_MS = 260;
+
+// ---- toolbar icons ----
+// Small stroke-based icons (shared visual language: 16x16, currentColor,
+// round joins) so the toolbar reads as icon-only instead of mixing symbols
+// (−/+/✕) with Japanese labels.
+
+interface IconShape {
+  d?: string;
+  cx?: number;
+  cy?: number;
+  r?: number;
+}
+
+function createStrokeIcon(shapes: IconShape[]): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('width', '16');
+  svg.setAttribute('height', '16');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.4');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+
+  for (const shape of shapes) {
+    if (shape.d) {
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', shape.d);
+      svg.appendChild(path);
+    } else if (shape.cx !== undefined && shape.cy !== undefined && shape.r !== undefined) {
+      const circle = document.createElementNS(SVG_NS, 'circle');
+      circle.setAttribute('cx', String(shape.cx));
+      circle.setAttribute('cy', String(shape.cy));
+      circle.setAttribute('r', String(shape.r));
+      svg.appendChild(circle);
+    }
+  }
+  return svg;
+}
+
+function createJumpIcon(): SVGSVGElement {
+  return createStrokeIcon([{ d: 'M3 8h9M8 4l4 4-4 4' }]);
+}
+
+function createZoomOutIcon(): SVGSVGElement {
+  return createStrokeIcon([{ cx: 6.5, cy: 6.5, r: 4.5 }, { d: 'M4.5 6.5h4M10 10l4 4' }]);
+}
+
+function createZoomInIcon(): SVGSVGElement {
+  return createStrokeIcon([{ cx: 6.5, cy: 6.5, r: 4.5 }, { d: 'M6.5 4.5v4M4.5 6.5h4M10 10l4 4' }]);
+}
+
+function createDownloadIcon(): SVGSVGElement {
+  return createStrokeIcon([{ d: 'M8 2v8m0 0l-3-3m3 3l3-3M3 13h10' }]);
+}
+
+function createCloseIcon(): SVGSVGElement {
+  const svg = createStrokeIcon([{ d: 'M4 4l8 8M12 4l-8 8' }]);
+  svg.setAttribute('stroke-width', '1.5');
+  return svg;
+}
+
+function createToolbarSeparator(): HTMLSpanElement {
+  const sep = document.createElement('span');
+  sep.className = 'gpv-toolbar-sep gpv-pdfjs-only';
+  sep.setAttribute('aria-hidden', 'true');
+  return sep;
+}
 
 interface PageEntry {
   placeholder: HTMLDivElement;
@@ -84,15 +157,20 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
     const jumpBtn = document.createElement('button');
     jumpBtn.type = 'button';
     jumpBtn.className = 'gpv-btn gpv-pdfjs-only';
-    jumpBtn.textContent = '移動';
+    jumpBtn.title = '指定ページへ移動';
+    jumpBtn.setAttribute('aria-label', '指定ページへ移動');
+    jumpBtn.appendChild(createJumpIcon());
     jumpBtn.addEventListener('click', () => jumpToPage(Number(pageInputEl?.value)));
     toolbar.appendChild(jumpBtn);
+
+    toolbar.appendChild(createToolbarSeparator());
 
     zoomOutBtn = document.createElement('button');
     zoomOutBtn.type = 'button';
     zoomOutBtn.className = 'gpv-btn gpv-pdfjs-only';
-    zoomOutBtn.textContent = '−';
+    zoomOutBtn.title = '縮小';
     zoomOutBtn.setAttribute('aria-label', '縮小');
+    zoomOutBtn.appendChild(createZoomOutIcon());
     zoomOutBtn.addEventListener('click', () => changeZoom(-1));
     toolbar.appendChild(zoomOutBtn);
 
@@ -103,16 +181,21 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
     zoomInBtn = document.createElement('button');
     zoomInBtn.type = 'button';
     zoomInBtn.className = 'gpv-btn gpv-pdfjs-only';
-    zoomInBtn.textContent = '+';
+    zoomInBtn.title = '拡大';
     zoomInBtn.setAttribute('aria-label', '拡大');
+    zoomInBtn.appendChild(createZoomInIcon());
     zoomInBtn.addEventListener('click', () => changeZoom(1));
     toolbar.appendChild(zoomInBtn);
 
+    toolbar.appendChild(createToolbarSeparator());
+
     const downloadLink = document.createElement('a');
     downloadLink.className = 'gpv-btn gpv-download-btn';
-    downloadLink.textContent = 'ダウンロード';
+    downloadLink.title = 'ダウンロード';
+    downloadLink.setAttribute('aria-label', 'ダウンロード');
     downloadLink.href = url;
     downloadLink.download = title || '';
+    downloadLink.appendChild(createDownloadIcon());
     toolbar.appendChild(downloadLink);
 
     // The toolbar is sticky, so this stays reachable even after scrolling
@@ -120,8 +203,9 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'gpv-btn gpv-close-btn';
-    closeBtn.textContent = '✕';
+    closeBtn.title = 'PDFを閉じる';
     closeBtn.setAttribute('aria-label', 'PDFを閉じる');
+    closeBtn.appendChild(createCloseIcon());
     closeBtn.addEventListener('click', () => onRequestClose());
     toolbar.appendChild(closeBtn);
 
@@ -260,6 +344,16 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
 
     anchorEl.insertAdjacentElement('afterend', container);
 
+    // Added with the base (closed) class first so the initial frame paints
+    // invisible/offset, then .gpv-open is added a couple of frames later to
+    // actually trigger the CSS transition (adding it in the same tick risks
+    // the browser coalescing both states into one, skipping the animation).
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        container?.classList.add('gpv-open');
+      });
+    });
+
     try {
       loadingTask = getDocument({ url });
       pdfDoc = await loadingTask.promise;
@@ -329,7 +423,14 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
     void loadingTask?.destroy();
     loadingTask = null;
 
-    container?.remove();
+    if (container) {
+      const el = container;
+      el.classList.remove('gpv-open');
+      // Whichever fires first wins; remove() on an already-detached node is
+      // a no-op, so the redundant call is harmless.
+      el.addEventListener('transitionend', () => el.remove(), { once: true });
+      setTimeout(() => el.remove(), CLOSE_TRANSITION_MS);
+    }
     container = null;
   }
 
