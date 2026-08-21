@@ -83,6 +83,8 @@ growi-plugin-pdf-viewer/
   `.gpv-toggle-label` の `textContent` だけを更新するので、アイコンを毎回作り直さずに済む。ボタン文言は
   英語（`View PDF` / `Close PDF`）に統一している一方、ツールバー内の他の文言（ページ移動・ダウンロード等）は
   日本語のまま残っており、UI 文言の言語は現時点で統一されていない。
+  **`title` は `link.textContent` を `enhanceLink()` の冒頭（アイコン挿入より前）で一度だけ読んでキャッシュ
+  し、`EnhancedLink.title` として保持している**（後述ハマりどころ #16 参照）。
 - **`findBlockContainer(link)`**: トグルボタンの挿入位置を決める。`link.closest('p, li, td, th, dd, dt,
   blockquote')`（無ければ `link.parentElement`）でリンクの文章が属するブロック要素を求め、そのブロックの
   直後（`insertAdjacentElement('afterend', ...)`）にボタンを置く。これにより、ボタンは文中のリンクのすぐ
@@ -317,6 +319,28 @@ Vite 5+ では `vite.config.ts` で `build.manifest: 'manifest.json'` を明示�
 `prefers-reduced-motion: reduce` では `.gpv-inline-viewer` の `transition` を丸ごと無効化し、クラス切り替え
 自体は即座に反映されるようにしている（アニメーション抑制の設定を尊重しつつ機能は変わらない）。
 
+### 16. アイコンに文字を入れたことで `link.textContent` の読み取りが壊れた実例
+
+`createPdfIcon()`（`pdfViewer.ts`）は当初、折れ角付きのページ形状だけの純粋な線画だった。視認性改善のため
+「角丸の赤バッジ＋白抜き文字『PDF』」のロゴ風デザインに変更した際、SVG の `<text>` 要素で `PDF` という
+文字を直接描画するようにした（`label.textContent = 'PDF'`）。
+
+このアイコンは `enhanceLink()` で対象の `<a>` 要素の**内部**（`link.insertBefore(icon, link.firstChild)`）に
+挿入される。ここで、アイコン挿入後に `link.textContent` を読むと、SVG の `<text>` ノードの中身（`"PDF"`）が
+本来のリンクテキスト（例: `"tracemonkey-report.pdf"`）の前に連結され、`"PDFtracemonkey-report.pdf"` に
+なってしまう。`aria-hidden="true"` は支援技術のアクセシビリティツリーからは隠すが、**DOM の `textContent`
+プロパティには一切影響しない**ため、これは静かに発生する。
+
+実際に `toggleViewer()` が `state.link.textContent?.trim()` を`インライン展開直後`（＝アイコン挿入後）に
+読んでビューアのタイトル・ダウンロードファイル名として使っていたため、実際に「PDFtracemonkey-report.pdf」
+という壊れたファイル名が表示される不具合になっていた。
+
+対応: `enhanceLink()` の**冒頭・アイコン挿入より前**に `const title = link.textContent?.trim() ?? '';` で
+一度だけ確定させ、`EnhancedLink.title` としてキャッシュする形に変更した。以後は `state.link.textContent`
+を再度読まず、常に `state.title` を使う。**アイコン（またはトグルボタン等、リンク内に追加する任意の装飾要素）
+に文字ノードを含めた場合、その要素より後に挿入される装飾は必ず「リンク本来のテキストを先に確定させてから
+DOM を書き換える」順序を守ること。**
+
 ### 命名規約
 
 | 対象 | 値 |
@@ -371,6 +395,8 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
     `title` のツールチップが出る
 12d. 「View PDF」を押すとビューアがふわっとフェード・スライドしながら展開し、閉じるときも滑らかに消える
     （`prefers-reduced-motion` を有効にしている場合は瞬時に切り替わる）
+12e. ツールバーのタイトル表示・ダウンロードボタンの `download` 属性がどちらも元のファイル名そのまま
+    （アイコンの `PDF` ラベル文字が混入していない）
 13. 編集モードへ遷移するとトグル UI が消え元の `<a>` に戻る。編集モードから戻ると再度ボタンが付く
 14. SPA 遷移後の新ページの PDF リンクも自動検出される
 15. `/admin` 配下では変換が行われない

@@ -8,6 +8,11 @@
   --gpv-page-bg: #ffffff;
   --gpv-canvas-area-bg: #e9e9ea;
   --gpv-radius: 6px;
+  /* PDF badge red: intentionally the same in light/dark (not duplicated in
+     the theme blocks below like the other variables) since white-on-red
+     reads fine against either background. */
+  --gpv-pdf-badge: #d32f2f;
+  --gpv-pdf-badge-fold: #a82424;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -76,7 +81,6 @@ a.gpv-pdf-link {
 
 .gpv-toggle-icon {
   flex: none;
-  color: var(--gpv-accent);
 }
 
 /* ---- viewer container ---- */

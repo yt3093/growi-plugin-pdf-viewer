@@ -12,6 +12,10 @@ const ATTACHMENT_LINK_SELECTOR = 'a[href^="/attachment/"]';
 
 interface EnhancedLink {
   link: HTMLAnchorElement;
+  // Captured before the icon (which now embeds its own "PDF" text label) is
+  // inserted into the link, so re-deriving the filename later never picks
+  // up that label alongside the real text.
+  title: string;
   icon: SVGSVGElement;
   toggleBtn: HTMLButtonElement;
   clickHandler: (event: MouseEvent) => void;
@@ -38,26 +42,46 @@ function isInEditorDOM(el: Element): boolean {
 
 // ---- icon ----
 
+// Rounded-badge "PDF" logotype rather than a literal folded-page silhouette:
+// at the ~14-16px this renders at inline/in-button, a small page outline
+// with the label squeezed into a corner ribbon becomes illegible, whereas
+// dedicating the whole icon area to the badge keeps "PDF" readable down to
+// real usage size.
 function createPdfIcon(): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 16 16');
   svg.setAttribute('width', '16');
   svg.setAttribute('height', '16');
-  svg.setAttribute('fill', 'currentColor');
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('gpv-pdf-icon');
 
-  const page = document.createElementNS(SVG_NS, 'path');
-  page.setAttribute('fill', 'none');
-  page.setAttribute('stroke', 'currentColor');
-  page.setAttribute('stroke-width', '1.2');
-  page.setAttribute('d', 'M4 1h5l3 3v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z');
-  svg.appendChild(page);
+  const badge = document.createElementNS(SVG_NS, 'rect');
+  badge.setAttribute('x', '1');
+  badge.setAttribute('y', '2');
+  badge.setAttribute('width', '14');
+  badge.setAttribute('height', '12');
+  badge.setAttribute('rx', '2.2');
+  badge.setAttribute('fill', 'var(--gpv-pdf-badge)');
+  svg.appendChild(badge);
 
   const fold = document.createElementNS(SVG_NS, 'path');
-  fold.setAttribute('fill', 'currentColor');
-  fold.setAttribute('d', 'M9 1v3h3z');
+  fold.setAttribute('d', 'M11.5 2v2.6a1 1 0 0 0 1 1H15');
+  fold.setAttribute('fill', 'none');
+  fold.setAttribute('stroke', 'var(--gpv-pdf-badge-fold)');
+  fold.setAttribute('stroke-width', '1');
   svg.appendChild(fold);
+
+  const label = document.createElementNS(SVG_NS, 'text');
+  label.setAttribute('x', '8');
+  label.setAttribute('y', '10.6');
+  label.setAttribute('text-anchor', 'middle');
+  label.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
+  label.setAttribute('font-size', '5.4');
+  label.setAttribute('font-weight', '800');
+  label.setAttribute('letter-spacing', '-0.3');
+  label.setAttribute('fill', '#fff');
+  label.textContent = 'PDF';
+  svg.appendChild(label);
 
   return svg;
 }
@@ -98,7 +122,7 @@ function toggleViewer(state: EnhancedLink): void {
   // close path and keep this button's label/aria-expanded in sync.
   const viewer = createInlineViewer({
     url: state.link.href,
-    title: state.link.textContent?.trim() ?? '',
+    title: state.title,
     anchorEl: state.toggleBtn,
     onRequestClose: () => closeViewer(state),
   });
@@ -116,6 +140,8 @@ function findBlockContainer(link: HTMLAnchorElement): Element {
 }
 
 function enhanceLink(link: HTMLAnchorElement): void {
+  const title = link.textContent?.trim() ?? '';
+
   link.setAttribute(ENHANCED_ATTR, 'true');
   link.classList.add('gpv-pdf-link');
 
@@ -138,7 +164,7 @@ function enhanceLink(link: HTMLAnchorElement): void {
 
   findBlockContainer(link).insertAdjacentElement('afterend', toggleBtn);
 
-  const state: EnhancedLink = { link, icon, toggleBtn, clickHandler: () => {}, viewer: null };
+  const state: EnhancedLink = { link, title, icon, toggleBtn, clickHandler: () => {}, viewer: null };
 
   const clickHandler = (event: MouseEvent): void => {
     event.preventDefault();
