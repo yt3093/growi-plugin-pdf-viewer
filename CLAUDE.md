@@ -341,6 +341,26 @@ Vite 5+ では `vite.config.ts` で `build.manifest: 'manifest.json'` を明示�
 に文字ノードを含めた場合、その要素より後に挿入される装飾は必ず「リンク本来のテキストを先に確定させてから
 DOM を書き換える」順序を守ること。**
 
+### 17. GROWI 実機で `.gpv-pdf-link` にホバーしてもポインターカーソルにならない
+
+GROWI Cloud に実際にインストールして確認したところ、`a.gpv-pdf-link`（本文中の添付リンク）にマウスホバー
+しても指カーソル（`cursor: pointer`）にならない不具合が報告された。ローカルの素の HTML（GROWI 側の CSS
+無し）で確認すると `getComputedStyle(link).cursor` は `"pointer"` を返す（`<a href>` に対するブラウザの
+UA デフォルト）ため、プラグイン単体の CSS 自体には問題が無い。原因は、GROWI 側のテーマ CSS（Bootstrap
+ベース）が本プラグインの CSS より後に評価される、または同等以上の詳細度のセレクタで `a` / `svg` の
+`cursor` をリセットしていると推測される。
+
+**同じ理由で `.gpv-toggle-btn` / `.gpv-btn` には元々 `cursor: pointer` を明示している**（`<button>` 要素は
+ブラウザによって既定で `cursor: pointer` にならないため）。`a.gpv-pdf-link` にはこの明示指定が抜けていた。
+
+対応: `a.gpv-pdf-link, a.gpv-pdf-link *` に `cursor: pointer !important;` を明示した。子要素（SVG アイコン）
+まで含めているのは、GROWI 側が `svg { cursor: ... }` のように子要素だけを狙って上書きしてくるケースにも
+耐えるため。`!important` を使っているのは数少ない正当なケース（自分たちの管理外のホストページ CSS と
+衝突しており、かつこのプロパティについてホスト側が優先されるべき理由が無いため）。Playwright で
+「プラグイン CSS 読み込み後に `.wiki a { cursor: default }` 等を追加注入」というシナリオを模擬し、
+`!important` 無しでは有効にならないケース（ホスト側セレクタが同等以上の詳細度の場合）でも
+`cursor: pointer` が維持されることを確認済み。
+
 ### 命名規約
 
 | 対象 | 値 |
@@ -397,6 +417,7 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
     （`prefers-reduced-motion` を有効にしている場合は瞬時に切り替わる）
 12e. ツールバーのタイトル表示・ダウンロードボタンの `download` 属性がどちらも元のファイル名そのまま
     （アイコンの `PDF` ラベル文字が混入していない）
+12f. GROWI 実機で `.gpv-pdf-link` にマウスホバーすると指カーソル（`cursor: pointer`）になる
 13. 編集モードへ遷移するとトグル UI が消え元の `<a>` に戻る。編集モードから戻ると再度ボタンが付く
 14. SPA 遷移後の新ページの PDF リンクも自動検出される
 15. `/admin` 配下では変換が行われない

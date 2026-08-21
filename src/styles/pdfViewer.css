@@ -48,6 +48,16 @@ a.gpv-pdf-link {
   color: var(--gpv-accent);
 }
 
+/* GROWI's own theme CSS can reset cursor on <a>/svg descendants with
+   higher specificity than plain UA defaults (same reason .gpv-btn below
+   sets cursor explicitly instead of relying on browser defaults for
+   <button>), so this is pinned with !important to guarantee the pointer
+   cursor survives regardless of host-page styles. */
+a.gpv-pdf-link,
+a.gpv-pdf-link * {
+  cursor: pointer !important;
+}
+
 .gpv-pdf-icon {
   flex: none;
 }
