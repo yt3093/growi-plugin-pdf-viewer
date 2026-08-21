@@ -29,7 +29,7 @@
 | エディタ DOM 除外 | `.CodeMirror` / `.cm-editor` / `[contenteditable="true"]` 配下の要素は対象外 |
 | 非実行条件 | 編集モード（`/edit`, `#edit`, `body.editing`, `body.grw-editor-mode`, `body.modal-open`）・管理画面（`/admin`）では実行しない |
 | ダークモード | `@media (prefers-color-scheme: dark)` と `html[data-bs-theme="dark"]`（Bootstrap 5.3 GROWI UI トグル）の双方で配色を切り替える（2 箇所は値を同期させること） |
-| 印刷対応 | `@media print` でツールバー等の操作 UI を非表示にする |
+| 印刷対応 | `@media print` でツールバー等の操作 UI を非表示にする。加えて `beforeprint` イベントで開いている全ビューアの未描画ページを強制描画し、遅延描画のせいで印刷結果が空白になるのを防ぐ（ベストエフォート、後述ハマりどころ #18） |
 | アイコンツールバー | ページ移動/ズーム/ダウンロード/閉じるを全て `title`/`aria-label` 付きのアイコンボタンに統一し、日本語テキストと英語トグル文言の混在を解消 |
 | 展開アニメーション | `.gpv-inline-viewer` の `opacity`/`transform` トランジションで滑らかに展開・折りたたみ。`prefers-reduced-motion: reduce` では無効化 |
 
@@ -135,6 +135,8 @@ growi-plugin-pdf-viewer/
   新しい scale で描画されるので不要）。
 - **`collapse()`**: `IntersectionObserver.disconnect()`、進行中の `RenderTask.cancel()`、`resize` リスナ解除、
   `loadingTask.destroy()`（`pdfDoc.destroy()` ではない、後述）、コンテナ DOM 除去を行う。
+- **`prepareForPrint()`**: `pages` の中で `rendered` が false のものだけ `renderPage()` を呼ぶ（既に描画済みの
+  ページは触らない）。`pdfViewer.ts` 側の `beforeprint` リスナから、開いている全ビューアに対して呼ばれる。
 
 ### pdf.js のバンドル方針（自己完結・CDN 不使用）
 
@@ -361,6 +363,27 @@ UA デフォルト）ため、プラグイン単体の CSS 自体には問題が
 `!important` 無しでは有効にならないケース（ホスト側セレクタが同等以上の詳細度の場合）でも
 `cursor: pointer` が維持されることを確認済み。
 
+### 18. `beforeprint` での強制描画はベストエフォート止まり（原理的な限界）
+
+遅延描画（`IntersectionObserver`）により、スクロールしてまだ画面に近づいていないページは印刷時にも
+未描画（空白）のまま出力されてしまう問題があった。対応として `window.addEventListener('beforeprint', ...)`
+で開いている全ビューアの未描画ページに対して `renderPage()` を呼び出す（`InlineViewerHandle.prepareForPrint()`）
+実装を追加した。
+
+ただし、これは**確実な解決策ではなくベストエフォート**であることを明記しておく。`beforeprint` イベントは
+印刷実行前に発火するが、ブラウザは**非同期処理の完了を待ってから印刷を開始するわけではない**
+（スクリプト側に印刷を遅延させる標準的な手段が無い）。`page.render()` は Promise を返す非同期処理のため、
+理論上は「ビューアを開いた直後に即座に印刷した」場合、`beforeprint` ハンドラが `renderPage()` を呼び出して
+いる最中に印刷が実行され、一部のページが描画途中のまま出力される可能性が残る。
+
+Playwright での検証では `window.dispatchEvent(new Event('beforeprint'))` を発火させてから
+`renderTask.promise` の完了を待つ時間（実測: 14 ページで 1.5 秒程度）を確保すれば全ページ描画されることを
+確認しているが、これは「スクリプトからイベントを発火してから十分待った場合」の確認であり、**実際のブラウザ
+の印刷ダイアログがどれだけ待ってくれるかは保証されていない**。この制約はブラウザの仕様上の限界であり、
+本プラグイン側だけでは解決できない（対応するとすれば `max-height`/`IntersectionObserver` を使わず
+全ページを常時レンダリングする設計に変える必要があるが、それは遅延描画によるパフォーマンス上の利点を
+失うトレードオフになるため採用していない）。
+
 ### 命名規約
 
 | 対象 | 値 |
@@ -426,6 +449,8 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
     `<a>` に戻る
 18. ダークモード切替（OS / GROWI UI トグルの両方）でツールバー等の配色が同じように適切に変わる
 19. 印刷プレビューでツールバーが非表示になる
+19a. PDFを展開した状態でしばらく（1〜2秒程度）待ってから印刷プレビューを開くと、スクロールしていない
+    後半のページも空白にならず描画された状態で出力される（ハマりどころ #18 の限界内で確認）
 20. （S3/GCS Redirect Mode 環境、または Playwright の `page.route().abort()` 等で fetch を失敗させた場合）
     CORS 失敗時に iframe フォールバックへ切り替わり、タイトル・ダウンロードボタン以外のツールバー操作が
     非表示になる

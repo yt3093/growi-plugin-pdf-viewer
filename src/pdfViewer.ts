@@ -265,6 +265,17 @@ export function createPdfViewer(): PdfViewerHandle {
     return el.closest('.gpv-pdf-link, .gpv-toggle-btn, .gpv-inline-viewer') !== null;
   }
 
+  // Best-effort only: `beforeprint` doesn't let a script delay printing for
+  // async work, and page rendering is async, so a print triggered the
+  // instant a viewer opens can still catch some pages mid-render. This at
+  // least covers the common case of printing after the page has been open
+  // for a moment, and never makes things worse.
+  function onBeforePrint(): void {
+    for (const state of enhancedLinks.values()) {
+      state.viewer?.prepareForPrint();
+    }
+  }
+
   return {
     mount(): void {
       history.pushState = function pushState(...args) {
@@ -279,6 +290,7 @@ export function createPdfViewer(): PdfViewerHandle {
       window.addEventListener('popstate', onNavigate);
       window.addEventListener('hashchange', onNavigate);
       window.addEventListener(NAV_EVENT, onNavigate);
+      window.addEventListener('beforeprint', onBeforePrint);
 
       observer = new MutationObserver((mutations) => {
         const scanRoots: Element[] = [];
@@ -316,6 +328,7 @@ export function createPdfViewer(): PdfViewerHandle {
       window.removeEventListener('popstate', onNavigate);
       window.removeEventListener('hashchange', onNavigate);
       window.removeEventListener(NAV_EVENT, onNavigate);
+      window.removeEventListener('beforeprint', onBeforePrint);
 
       history.pushState = origPushState;
       history.replaceState = origReplaceState;

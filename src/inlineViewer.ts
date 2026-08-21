@@ -434,5 +434,11 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
     container = null;
   }
 
-  return { expand, collapse };
+  function prepareForPrint(): void {
+    pages.forEach((entry, n) => {
+      if (!entry.rendered) void renderPage(n);
+    });
+  }
+
+  return { expand, collapse, prepareForPrint };
 }

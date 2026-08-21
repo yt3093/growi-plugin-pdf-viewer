@@ -12,6 +12,10 @@ export interface PdfViewerHandle {
 export interface InlineViewerHandle {
   expand: () => Promise<void>;
   collapse: () => void;
+  // Force-renders any pages the IntersectionObserver hasn't reached yet, so
+  // a print triggered before the user has scrolled through the whole
+  // document doesn't leave later pages blank.
+  prepareForPrint: () => void;
 }
 
 export interface InlineViewerOptions {
