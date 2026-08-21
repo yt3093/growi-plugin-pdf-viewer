@@ -1,5 +1,5 @@
 import { getDocument, TextLayer } from 'pdfjs-dist';
-import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
+import type { OnProgressParameters, PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 import type { InlineViewerHandle, InlineViewerOptions } from './types';
 
 const ZOOM_STEPS = [0.6, 0.8, 1.0, 1.25, 1.5, 2.0];
@@ -95,7 +95,33 @@ function debounce(fn: () => void, wait: number): () => void {
   };
 }
 
-export function createInlineViewer({ url, title, anchorEl, onRequestClose }: InlineViewerOptions): InlineViewerHandle {
+// Module-level (shared by every createInlineViewer() instance, not per
+// instance): all viewers share one global PDFWorker (GlobalWorkerOptions
+// .workerPort is set once in pdfViewer.ts), and calling getDocument() while
+// a previous loadingTask's destroy() is still in flight throws "the worker
+// is being destroyed" -- observed in practice when retrying a failed load,
+// but the same race is reachable across two different viewer instances too
+// (closing one PDF and immediately reopening it, or opening another PDF,
+// before the close's destroy() has settled). Every destroy is queued here,
+// and every new load waits for the queue to drain first, regardless of
+// which viewer instance triggered which.
+let workerTeardownChain: Promise<void> = Promise.resolve();
+
+function destroyLoadingTaskAsync(task: PDFDocumentLoadingTask): void {
+  workerTeardownChain = workerTeardownChain.then(() => task.destroy()).catch(() => {});
+}
+
+async function waitForPendingWorkerTeardown(): Promise<void> {
+  await workerTeardownChain;
+}
+
+export function createInlineViewer({
+  url,
+  title,
+  anchorEl,
+  onRequestClose,
+  initialPage,
+}: InlineViewerOptions): InlineViewerHandle {
   let container: HTMLDivElement | null = null;
   let loadingTask: PDFDocumentLoadingTask | null = null;
   let pdfDoc: PDFDocumentProxy | null = null;
@@ -104,6 +130,12 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
   let baseUnscaledWidth = 0;
   let baseUnscaledHeight = 0;
   let zoomIndex = DEFAULT_ZOOM_INDEX;
+  // getDocument() failures are often indistinguishable from transient
+  // network blips (fetch() surfaces CORS blocks and offline/DNS errors as
+  // the same opaque error), so the first failure offers a retry instead of
+  // immediately assuming it's unrecoverable; only a repeat failure falls
+  // back to the iframe.
+  let loadAttempts = 0;
 
   const pages = new Map<number, PageEntry>();
 
@@ -286,10 +318,10 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
     });
   }
 
-  function jumpToPage(target: number): void {
+  function jumpToPage(target: number, behavior: ScrollBehavior = 'smooth'): void {
     if (!pdfDoc || !Number.isFinite(target)) return;
     const clamped = Math.min(Math.max(Math.trunc(target), 1), pdfDoc.numPages);
-    pages.get(clamped)?.placeholder.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    pages.get(clamped)?.placeholder.scrollIntoView({ behavior, block: 'start' });
   }
 
   function changeZoom(delta: number): void {
@@ -332,6 +364,106 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
     container.appendChild(iframe);
   }
 
+  // A first failure could just as easily be a transient network blip as a
+  // persistent CORS block — fetch() can't tell script code which one
+  // happened — so it's offered a cheap retry before assuming the worst.
+  function showRetryPrompt(status: HTMLDivElement): void {
+    status.replaceChildren();
+
+    const message = document.createElement('div');
+    message.textContent = 'PDFを読み込めませんでした。';
+    status.appendChild(message);
+
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'gpv-retry-btn';
+    retryBtn.textContent = '再試行';
+    retryBtn.addEventListener('click', () => {
+      status.textContent = '読み込み中…';
+      void attemptLoad(status);
+    });
+    status.appendChild(retryBtn);
+  }
+
+  async function attemptLoad(status: HTMLDivElement): Promise<void> {
+    if (loadingTask) {
+      destroyLoadingTaskAsync(loadingTask);
+      loadingTask = null;
+    }
+    await waitForPendingWorkerTeardown();
+
+    try {
+      loadingTask = getDocument({ url });
+      loadingTask.onProgress = ({ loaded, total }: OnProgressParameters) => {
+        if (!total) {
+          status.textContent = '読み込み中…';
+          return;
+        }
+        const percent = Math.min(100, Math.round((loaded / total) * 100));
+        status.textContent = `読み込み中… ${percent}%`;
+      };
+      pdfDoc = await loadingTask.promise;
+      const firstPage = await pdfDoc.getPage(1);
+      const unscaledViewport = firstPage.getViewport({ scale: 1 });
+      baseUnscaledWidth = unscaledViewport.width;
+      baseUnscaledHeight = unscaledViewport.height;
+
+      status.remove();
+      const pagesEl = document.createElement('div');
+      pagesEl.className = 'gpv-pages';
+      container?.appendChild(pagesEl);
+
+      for (let n = 1; n <= pdfDoc.numPages; n += 1) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'gpv-page-placeholder';
+        placeholder.dataset.gpvPage = String(n);
+        placeholder.setAttribute('aria-label', `ページ ${n}`);
+        // Shown until renderPage() clears it and inserts the canvas, so a
+        // page waiting for IntersectionObserver to reach it doesn't read as
+        // a blank/broken area while scrolling.
+        const spinner = document.createElement('div');
+        spinner.className = 'gpv-page-spinner';
+        placeholder.appendChild(spinner);
+        pagesEl.appendChild(placeholder);
+        pages.set(n, { placeholder, canvas: null, textLayerEl: null, renderTask: null, rendered: false });
+      }
+
+      layoutPlaceholders(pagesEl);
+      const startPage = initialPage && initialPage <= pdfDoc.numPages ? initialPage : 1;
+      updatePageIndicator(startPage, pdfDoc.numPages);
+
+      observer = new IntersectionObserver(handleIntersect, {
+        root: null,
+        rootMargin: '400px 0px',
+        threshold: [0, CURRENT_PAGE_THRESHOLD],
+      });
+      pages.forEach((entry) => observer?.observe(entry.placeholder));
+
+      resizeHandler = debounce(() => {
+        if (!container) return;
+        const el = container.querySelector('.gpv-pages');
+        if (!(el instanceof HTMLElement)) return;
+        layoutPlaceholders(el);
+        pages.forEach((entry, n) => {
+          if (entry.rendered) void renderPage(n);
+        });
+      }, 200);
+      window.addEventListener('resize', resizeHandler);
+
+      // Instant rather than smooth: this runs as part of the initial open,
+      // so animating the scroll here would fight the fade/slide-in
+      // transition instead of just landing on the right page already.
+      if (startPage !== 1) jumpToPage(startPage, 'auto');
+    } catch {
+      loadAttempts += 1;
+      if (loadAttempts >= 2) {
+        showFallback(status);
+      } else {
+        showRetryPrompt(status);
+      }
+    }
+  }
+
   async function expand(): Promise<void> {
     container = document.createElement('div');
     container.className = 'gpv-inline-viewer';
@@ -354,57 +486,7 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
       });
     });
 
-    try {
-      loadingTask = getDocument({ url });
-      pdfDoc = await loadingTask.promise;
-      const firstPage = await pdfDoc.getPage(1);
-      const unscaledViewport = firstPage.getViewport({ scale: 1 });
-      baseUnscaledWidth = unscaledViewport.width;
-      baseUnscaledHeight = unscaledViewport.height;
-
-      status.remove();
-      const pagesEl = document.createElement('div');
-      pagesEl.className = 'gpv-pages';
-      container.appendChild(pagesEl);
-
-      for (let n = 1; n <= pdfDoc.numPages; n += 1) {
-        const placeholder = document.createElement('div');
-        placeholder.className = 'gpv-page-placeholder';
-        placeholder.dataset.gpvPage = String(n);
-        placeholder.setAttribute('aria-label', `ページ ${n}`);
-        // Shown until renderPage() clears it and inserts the canvas, so a
-        // page waiting for IntersectionObserver to reach it doesn't read as
-        // a blank/broken area while scrolling.
-        const spinner = document.createElement('div');
-        spinner.className = 'gpv-page-spinner';
-        placeholder.appendChild(spinner);
-        pagesEl.appendChild(placeholder);
-        pages.set(n, { placeholder, canvas: null, textLayerEl: null, renderTask: null, rendered: false });
-      }
-
-      layoutPlaceholders(pagesEl);
-      updatePageIndicator(1, pdfDoc.numPages);
-
-      observer = new IntersectionObserver(handleIntersect, {
-        root: null,
-        rootMargin: '400px 0px',
-        threshold: [0, CURRENT_PAGE_THRESHOLD],
-      });
-      pages.forEach((entry) => observer?.observe(entry.placeholder));
-
-      resizeHandler = debounce(() => {
-        if (!container) return;
-        const el = container.querySelector('.gpv-pages');
-        if (!(el instanceof HTMLElement)) return;
-        layoutPlaceholders(el);
-        pages.forEach((entry, n) => {
-          if (entry.rendered) void renderPage(n);
-        });
-      }, 200);
-      window.addEventListener('resize', resizeHandler);
-    } catch {
-      showFallback(status);
-    }
+    await attemptLoad(status);
   }
 
   function collapse(): void {
@@ -420,7 +502,7 @@ export function createInlineViewer({ url, title, anchorEl, onRequestClose }: Inl
     pages.clear();
 
     pdfDoc = null;
-    void loadingTask?.destroy();
+    if (loadingTask) destroyLoadingTaskAsync(loadingTask);
     loadingTask = null;
 
     if (container) {

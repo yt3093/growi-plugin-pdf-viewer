@@ -16,6 +16,10 @@ interface EnhancedLink {
   // inserted into the link, so re-deriving the filename later never picks
   // up that label alongside the real text.
   title: string;
+  // From a #page=N hash on the link, e.g. /attachment/xxx#page=5, so authors
+  // can cite a specific page ("see page 5 of this doc") and have it open
+  // straight there. null when absent/invalid.
+  initialPage: number | null;
   icon: SVGSVGElement;
   toggleBtn: HTMLButtonElement;
   clickHandler: (event: MouseEvent) => void;
@@ -96,6 +100,16 @@ function isEligibleLink(link: HTMLAnchorElement): boolean {
   return true;
 }
 
+// `link.hash` is resolved by the browser's URL parsing regardless of the
+// href being relative, so this works for both /attachment/xxx#page=5 and
+// full absolute URLs.
+function parseInitialPage(link: HTMLAnchorElement): number | null {
+  const match = link.hash.match(/^#page=(\d+)$/i);
+  if (!match) return null;
+  const page = Number(match[1]);
+  return Number.isInteger(page) && page > 0 ? page : null;
+}
+
 // ---- enhance / restore ----
 
 function setToggleLabel(toggleBtn: HTMLButtonElement, label: string): void {
@@ -125,6 +139,7 @@ function toggleViewer(state: EnhancedLink): void {
     title: state.title,
     anchorEl: state.toggleBtn,
     onRequestClose: () => closeViewer(state),
+    initialPage: state.initialPage,
   });
   state.viewer = viewer;
   setToggleLabel(state.toggleBtn, 'Close PDF');
@@ -141,6 +156,7 @@ function findBlockContainer(link: HTMLAnchorElement): Element {
 
 function enhanceLink(link: HTMLAnchorElement): void {
   const title = link.textContent?.trim() ?? '';
+  const initialPage = parseInitialPage(link);
 
   link.setAttribute(ENHANCED_ATTR, 'true');
   link.classList.add('gpv-pdf-link');
@@ -164,7 +180,15 @@ function enhanceLink(link: HTMLAnchorElement): void {
 
   findBlockContainer(link).insertAdjacentElement('afterend', toggleBtn);
 
-  const state: EnhancedLink = { link, title, icon, toggleBtn, clickHandler: () => {}, viewer: null };
+  const state: EnhancedLink = {
+    link,
+    title,
+    initialPage,
+    icon,
+    toggleBtn,
+    clickHandler: () => {},
+    viewer: null,
+  };
 
   const clickHandler = (event: MouseEvent): void => {
     event.preventDefault();

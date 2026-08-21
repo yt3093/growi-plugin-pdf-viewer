@@ -32,6 +32,9 @@
 | 印刷対応 | `@media print` でツールバー等の操作 UI を非表示にする。加えて `beforeprint` イベントで開いている全ビューアの未描画ページを強制描画し、遅延描画のせいで印刷結果が空白になるのを防ぐ（ベストエフォート、後述ハマりどころ #18） |
 | アイコンツールバー | ページ移動/ズーム/ダウンロード/閉じるを全て `title`/`aria-label` 付きのアイコンボタンに統一し、日本語テキストと英語トグル文言の混在を解消 |
 | 展開アニメーション | `.gpv-inline-viewer` の `opacity`/`transform` トランジションで滑らかに展開・折りたたみ。`prefers-reduced-motion: reduce` では無効化 |
+| 特定ページへの直接リンク | `/attachment/xxx#page=5` のようにリンクの `href` に `#page=N` を付けると、展開時にそのページへ自動ジャンプする（`scrollIntoView({behavior:'auto'})`）。Adobe の PDF Open Parameters 由来の慣習的な記法で、Chrome 等のブラウザ標準 PDF ビューアも同じ記法を認識するため CORS フォールバックの `<iframe>` でも副次的に機能する |
+| 読み込み進捗表示 | `loadingTask.onProgress` で「読み込み中… N%」を表示。`total` が不明な場合（サーバーが `Content-Length` を返さない等）は `読み込み中…` のみ表示しパーセンテージを出さない |
+| 読み込み失敗時の再試行 | `fetch` はブロック理由（CORS か一時的な失敗か）を JS 側から区別できないため、1 回目の失敗では即フォールバックせず「再試行」ボタンを表示する。2 回目も失敗して初めて CORS フォールバック（iframe）に切り替える（後述ハマりどころ #19） |
 
 ## アーキテクチャ
 
@@ -116,14 +119,24 @@ growi-plugin-pdf-viewer/
   の高さアニメーションは採用していない**: 中身の高さは遅延描画・ズームで継続的に変わるため、`max-height` を
   都度再計測し続ける実装は複雑さ・不具合リスクの割に効果が薄いと判断し、`opacity`/`transform` のみに絞った
   （詳細はハマりどころ #15 参照）。
-- **`expand()`**:
-  1. `getDocument({ url })` で `PDFDocumentLoadingTask` を取得し `.promise` を待つ（後述: `getDocument(url)` の
-     ように文字列を直接渡す呼び方は v6 の型では通らない）
-  2. 1 ページ目を取得して `scale: 1` の `viewport` からページの基準サイズ（`baseUnscaledWidth/Height`）を求める
+- **`expand()`** / **`attemptLoad(status)`**: `expand()` はコンテナ DOM を組み立てて開閉アニメーションの
+  トリガーだけ行い、実際の読み込みは `attemptLoad()` に委譲している。「再試行」ボタンから同じ関数を呼び直せる
+  ようにするための分離。`attemptLoad()`:
+  1. 前回（リトライ時）の `loadingTask` があれば破棄をキューに積み、`waitForPendingWorkerTeardown()` で
+     破棄完了を待ってから次に進む（後述ハマりどころ #19）
+  2. `getDocument({ url })` で `PDFDocumentLoadingTask` を取得し、`loadingTask.onProgress` で `.gpv-status` に
+     `読み込み中… N%` を反映しながら `.promise` を待つ（後述: `getDocument(url)` のように文字列を直接渡す
+     呼び方は v6 の型では通らない）
+  3. 1 ページ目を取得して `scale: 1` の `viewport` からページの基準サイズ（`baseUnscaledWidth/Height`）を求める
      （全ページ同一サイズという前提。異なる場合はページごとにサイズが揃わない可能性があるが未対応）
-  3. 全ページ分の空プレースホルダー `div.gpv-page-placeholder` を並べ、高さだけ先に確保する
-  4. `IntersectionObserver`（`rootMargin: '400px 0px'`, `threshold: [0, 0.5]`）で各プレースホルダーを監視
-  5. `resize` はデバウンスして再レイアウト＋描画済みページの再描画を行う
+  4. 全ページ分の空プレースホルダー `div.gpv-page-placeholder` を並べ、高さだけ先に確保する
+  5. `IntersectionObserver`（`rootMargin: '400px 0px'`, `threshold: [0, 0.5]`）で各プレースホルダーを監視
+  6. `resize` はデバウンスして再レイアウト＋描画済みページの再描画を行う
+  7. `initialPage`（`#page=N` から解析済み）があれば `jumpToPage(startPage, 'auto')` でそのページへ即座に
+     ジャンプする（`'auto'` を使うのは、開いた直後にスムーズスクロールさせるとフェード/スライド展開の
+     アニメーションと衝突して見た目がちぐはぐになるため）
+  失敗時（`catch`）: `loadAttempts` をインクリメントし、1 回目は `showRetryPrompt()`（「再試行」ボタン）、
+  2 回目以降は `showFallback()`（iframe フォールバック）を表示する。
 - **`handleIntersect(entries)`**: `isIntersecting` なプレースホルダーのうち未描画のものを `renderPage()` する。
   `intersectionRatio >= 0.5` のページ番号でページインジケータを更新する（＝画面中央付近に来たページを
   「現在のページ」とみなす）。
@@ -134,7 +147,10 @@ growi-plugin-pdf-viewer/
   ダー高さを再計算した上で、**既に描画済みのページのみ**再描画する（未描画ページは次に可視化されたときに
   新しい scale で描画されるので不要）。
 - **`collapse()`**: `IntersectionObserver.disconnect()`、進行中の `RenderTask.cancel()`、`resize` リスナ解除、
-  `loadingTask.destroy()`（`pdfDoc.destroy()` ではない、後述）、コンテナ DOM 除去を行う。
+  `loadingTask` があれば `destroyLoadingTaskAsync()`（`pdfDoc.destroy()` ではない、後述）でモジュール共有の
+  破棄キューに積む、コンテナ DOM 除去を行う。
+- **`jumpToPage(target, behavior = 'smooth')`**: 通常のページジャンプ入力は `'smooth'`、`attemptLoad()` からの
+  初期表示ジャンプ（`initialPage`）は `'auto'`（即座）を渡す。
 - **`prepareForPrint()`**: `pages` の中で `rendered` が false のものだけ `renderPage()` を呼ぶ（既に描画済みの
   ページは触らない）。`pdfViewer.ts` 側の `beforeprint` リスナから、開いている全ビューアに対して呼ばれる。
 
@@ -384,6 +400,38 @@ Playwright での検証では `window.dispatchEvent(new Event('beforeprint'))` �
 全ページを常時レンダリングする設計に変える必要があるが、それは遅延描画によるパフォーマンス上の利点を
 失うトレードオフになるため採用していない）。
 
+### 19. `loadingTask.destroy()` を `await` せず次の `getDocument()` を呼ぶと Worker が壊れる
+
+再試行ボタン（読み込み失敗時に同じ URL で `getDocument()` をもう一度呼ぶ機能）を実装した際、実機で以下の
+エラーが再現した。
+
+```
+PDFWorker.create - the worker is being destroyed.
+Please remember to await `PDFDocumentLoadingTask.destroy()`-calls.
+```
+
+原因: 本プラグインは `GlobalWorkerOptions.workerPort` を `pdfViewer.ts` の**モジュール読み込み時に一度だけ**
+生成し、**全ての `createInlineViewer()` インスタンスで共有**している（バンドルサイズの都合上、PDF ごとに
+別々の worker を作る設計にしていない）。`loadingTask.destroy()` は非同期に worker 側のリソース解放を行うが、
+`void loadingTask.destroy();`（await しない fire-and-forget）で呼んだ直後に同じ（または別の）インスタンスが
+`getDocument()` を呼ぶと、共有 worker の破棄処理がまだ終わっていない状態で新しいドキュメントの読み込みが
+始まってしまい、上記のエラーで失敗する。
+
+再現条件は「読み込み失敗 → 再試行」のような**同一インスタンス内での連続呼び出し**だけでなく、**あるビューア
+を閉じた直後に別のビューア（または同じリンクを再度）を開く**という、一見無関係な操作の組み合わせでも
+理論上発生しうる（共有 worker を介しているため、インスタンスをまたいで競合する）。
+
+対応: モジュールスコープ（`createInlineViewer` の外、全インスタンスで共有）に `workerTeardownChain` という
+Promise チェーンを持たせ、`destroyLoadingTaskAsync(task)` で破棄を `.then()` チェーンに積み、
+`waitForPendingWorkerTeardown()` で「現在キューに積まれている破棄が全て完了するまで待つ」ようにした。
+`collapse()` は `destroyLoadingTaskAsync()` を呼ぶだけで同期的なまま（キューに積むだけなので待たない）、
+`attemptLoad()` は `getDocument()` を呼ぶ**前**に必ず `await waitForPendingWorkerTeardown()` する。
+これにより「自分自身の直前の破棄」だけでなく「別インスタンスが直前に積んだ破棄」も含めて正しく順序付けられる。
+
+検証: Playwright で「読み込み失敗→再試行→（別の一時的失敗ではなく）成功」のシナリオと、「同じビューアを
+待ち時間なしで開く→閉じる、を3回連続で繰り返してから最後に開く」という worst-case を再現し、いずれも
+コンソールエラー無く正常に描画されることを確認した。
+
 ### 命名規約
 
 | 対象 | 値 |
@@ -454,6 +502,14 @@ GROWI 管理画面 `/admin/plugins` で **削除 → 再インストール**。
 20. （S3/GCS Redirect Mode 環境、または Playwright の `page.route().abort()` 等で fetch を失敗させた場合）
     CORS 失敗時に iframe フォールバックへ切り替わり、タイトル・ダウンロードボタン以外のツールバー操作が
     非表示になる
+21. `/attachment/xxx#page=5` のようなリンクを展開すると、ページ1ではなく5ページ目が表示された状態で開く
+    （ページインジケータも `5 / N` から始まる）
+22. 読み込み中に「読み込み中… N%」のようにパーセンテージが表示される（`total` が取得できない環境では
+    パーセンテージ無しの「読み込み中…」のみで `NaN%` 等の壊れた表示にならない）
+23. 読み込みに1回失敗すると「再試行」ボタンが表示され、押すと再度読み込みを試みる。再試行が成功すれば
+    通常のビューアが、再試行も失敗すれば iframe フォールバックが表示される
+24. 同じ添付PDFを「開く→閉じる」を待ち時間なしで連続して繰り返しても、コンソールにエラーが出ず最終的に
+    正しく開ける（Worker破棄の競合が起きない、ハマりどころ #19）
 
 ## 会話ガイドライン
 
