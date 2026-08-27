@@ -1,0 +1,332 @@
+:root {
+  --gpv-border: #d0d7de;
+  --gpv-bg: #ffffff;
+  --gpv-toolbar-bg: #f6f8fa;
+  --gpv-text: #24292f;
+  --gpv-muted: #57606a;
+  --gpv-accent: #0969da;
+  --gpv-page-bg: #ffffff;
+  --gpv-canvas-area-bg: #e9e9ea;
+  --gpv-radius: 6px;
+  /* PDF badge red: intentionally the same in light/dark (not duplicated in
+     the theme blocks below like the other variables) since white-on-red
+     reads fine against either background. */
+  --gpv-pdf-badge: #d32f2f;
+  --gpv-pdf-badge-fold: #a82424;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gpv-border: #30363d;
+    --gpv-bg: #22272e;
+    --gpv-toolbar-bg: #2d333b;
+    --gpv-text: #cdd9e5;
+    --gpv-muted: #909dab;
+    --gpv-accent: #6cb6ff;
+    --gpv-page-bg: #e9e9ea;
+    --gpv-canvas-area-bg: #1c2128;
+  }
+}
+
+html[data-bs-theme='dark'] {
+  --gpv-border: #30363d;
+  --gpv-bg: #22272e;
+  --gpv-toolbar-bg: #2d333b;
+  --gpv-text: #cdd9e5;
+  --gpv-muted: #909dab;
+  --gpv-accent: #6cb6ff;
+  --gpv-page-bg: #e9e9ea;
+  --gpv-canvas-area-bg: #1c2128;
+}
+
+/* ---- link + toggle ---- */
+
+a.gpv-pdf-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--gpv-accent);
+}
+
+/* GROWI's own theme CSS can reset cursor on <a>/svg descendants with
+   higher specificity than plain UA defaults (same reason .gpv-btn below
+   sets cursor explicitly instead of relying on browser defaults for
+   <button>), so this is pinned with !important to guarantee the pointer
+   cursor survives regardless of host-page styles. */
+a.gpv-pdf-link,
+a.gpv-pdf-link * {
+  cursor: pointer !important;
+}
+
+.gpv-pdf-icon {
+  flex: none;
+}
+
+.gpv-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.8em;
+  font-weight: 500;
+  border: 1px solid var(--gpv-border);
+  background: var(--gpv-bg);
+  color: var(--gpv-text);
+  border-radius: var(--gpv-radius);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gpv-toggle-btn:hover {
+  background: var(--gpv-toolbar-bg);
+  border-color: var(--gpv-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.gpv-toggle-btn:focus-visible {
+  outline: 2px solid var(--gpv-accent);
+  outline-offset: 1px;
+}
+
+.gpv-toggle-icon {
+  flex: none;
+}
+
+/* ---- viewer container ---- */
+
+.gpv-inline-viewer {
+  margin: 12px 0 20px;
+  border: 1px solid var(--gpv-border);
+  border-radius: var(--gpv-radius);
+  background: var(--gpv-canvas-area-bg);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.gpv-inline-viewer.gpv-open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gpv-inline-viewer {
+    transition: none;
+  }
+}
+
+.gpv-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--gpv-toolbar-bg);
+  border-bottom: 1px solid var(--gpv-border);
+  border-radius: var(--gpv-radius) var(--gpv-radius) 0 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.gpv-title {
+  flex: 1;
+  min-width: 80px;
+  font-size: 0.8em;
+  color: var(--gpv-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gpv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  /* Larger than the 16px icon strictly needs: 28px measured too small to
+     reliably tap on touch devices (Apple/Google both recommend ~44px). */
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--gpv-text);
+  border-radius: var(--gpv-radius);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.gpv-btn:hover {
+  background: var(--gpv-bg);
+  border-color: var(--gpv-border);
+}
+
+.gpv-btn:focus-visible {
+  outline: 2px solid var(--gpv-accent);
+  outline-offset: 1px;
+}
+
+.gpv-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.gpv-toolbar-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--gpv-border);
+  margin: 0 4px;
+}
+
+.gpv-page-indicator,
+.gpv-zoom-indicator {
+  font-size: 0.8em;
+  color: var(--gpv-text);
+  min-width: 3em;
+  text-align: center;
+}
+
+.gpv-page-input {
+  width: 3.6em;
+  height: 34px;
+  border: 1px solid var(--gpv-border);
+  background: var(--gpv-bg);
+  color: var(--gpv-text);
+  border-radius: var(--gpv-radius);
+  padding: 3px 6px;
+  font-size: 0.8em;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* ---- pages ---- */
+
+.gpv-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+
+.gpv-page-placeholder {
+  position: relative;
+  background: var(--gpv-page-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  width: 100%;
+}
+
+.gpv-page-placeholder canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.gpv-page-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border: 3px solid var(--gpv-border);
+  border-top-color: var(--gpv-accent);
+  border-radius: 50%;
+  animation: gpv-spin 0.8s linear infinite;
+}
+
+@keyframes gpv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gpv-page-spinner {
+    animation: none;
+  }
+}
+
+.gpv-status {
+  font-size: 0.9em;
+  color: var(--gpv-muted);
+  padding: 20px;
+  text-align: center;
+}
+
+.gpv-fallback-notice {
+  font-size: 0.8em;
+  color: var(--gpv-muted);
+  padding: 6px 10px;
+  background: var(--gpv-toolbar-bg);
+  border-bottom: 1px solid var(--gpv-border);
+}
+
+.gpv-fallback-iframe {
+  display: block;
+  width: 100%;
+  height: 80vh;
+  border: none;
+  border-radius: 0 0 var(--gpv-radius) var(--gpv-radius);
+  background: var(--gpv-page-bg);
+}
+
+/* ---- text layer (adapted from pdf.js text_layer_builder.css) ---- */
+
+.gpv-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-align: initial;
+  opacity: 1;
+  z-index: 1;
+}
+
+.gpv-text-layer span,
+.gpv-text-layer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+}
+
+.gpv-text-layer ::selection {
+  background: rgba(0, 100, 255, 0.3);
+}
+
+/* ---- print ---- */
+
+@media print {
+  .gpv-toggle-btn {
+    display: none;
+  }
+
+  .gpv-toolbar {
+    display: none;
+  }
+
+  .gpv-inline-viewer {
+    border: none;
+    background: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .gpv-page-spinner {
+    display: none;
+  }
+
+  .gpv-page-placeholder {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  .gpv-fallback-notice {
+    display: none;
+  }
+}
