@@ -343,24 +343,55 @@ export function createInlineViewer({
   // for the wiki origin. An <iframe> only needs the browser to *display*
   // the resource, which isn't subject to that restriction, so it still
   // works when the pdf.js fetch path doesn't.
-  function showFallback(status: HTMLDivElement): void {
+  //
+  // Before committing to the iframe, probe reachability with a *no-cors*
+  // fetch. This was originally done by listening for the iframe's `load`
+  // event with a timeout instead, but that doesn't work: `load` fires even
+  // when the browser shows its own internal "can't reach this page" error
+  // inside the iframe (there's essentially no reliable `error` event for
+  // iframes), so it can't distinguish a real load from total
+  // unreachability. A `mode: 'no-cors'` fetch can't be read (opaque
+  // response, status always 0) but unlike a normal fetch it still tells us
+  // whether *something* answered: it resolves as soon as any HTTP response
+  // comes back — including a redirect chain like GCS's, and regardless of
+  // status code — and only rejects on a genuine network-level failure (DNS,
+  // connection refused, offline). That's the reachable/unreachable signal
+  // the iframe events can't give us, without needing to read the body.
+  async function showFallback(status: HTMLDivElement): Promise<void> {
     if (!container) return;
-    status.remove();
 
+    let reachable = true;
+    try {
+      await fetch(url, { mode: 'no-cors' });
+    } catch {
+      reachable = false;
+    }
+    if (!container) return; // may have been collapsed while the probe ran
+
+    status.remove();
     container.querySelectorAll<HTMLElement>('.gpv-pdfjs-only').forEach((el) => {
       el.style.display = 'none';
     });
 
+    if (!reachable) {
+      const failureNotice = document.createElement('div');
+      failureNotice.className = 'gpv-fallback-notice';
+      failureNotice.textContent = 'PDFを表示できませんでした。ダウンロードしてご確認ください。';
+      container.appendChild(failureNotice);
+      return;
+    }
+
     const notice = document.createElement('div');
     notice.className = 'gpv-fallback-notice';
     notice.textContent =
-      'この環境では簡易表示のみ利用できます（ズーム・ページ移動・テキスト選択は使用できません）。';
+      'この環境では簡易表示のみ利用できます（ズーム・ページ移動・テキスト選択は使用できません）。' +
+      '表示されない場合は、ツールバーのダウンロードボタンからファイルを取得してください。';
     container.appendChild(notice);
 
     const iframe = document.createElement('iframe');
     iframe.className = 'gpv-fallback-iframe';
-    iframe.src = url;
     iframe.title = title;
+    iframe.src = url;
     container.appendChild(iframe);
   }
 
@@ -436,7 +467,7 @@ export function createInlineViewer({
     } catch {
       loadAttempts += 1;
       if (loadAttempts >= 2) {
-        showFallback(status);
+        void showFallback(status);
       } else {
         // Retried silently rather than surfacing a "failed, click to
         // retry" prompt: on a host with a persistent block (e.g. GROWI

@@ -145,8 +145,10 @@ a.gpv-pdf-link * {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  /* Larger than the 16px icon strictly needs: 28px measured too small to
+     reliably tap on touch devices (Apple/Google both recommend ~44px). */
+  width: 34px;
+  height: 34px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--gpv-text);
@@ -189,6 +191,7 @@ a.gpv-pdf-link * {
 
 .gpv-page-input {
   width: 3.6em;
+  height: 34px;
   border: 1px solid var(--gpv-border);
   background: var(--gpv-bg);
   color: var(--gpv-text);
@@ -196,6 +199,7 @@ a.gpv-pdf-link * {
   padding: 3px 6px;
   font-size: 0.8em;
   text-align: center;
+  box-sizing: border-box;
 }
 
 /* ---- pages ---- */
