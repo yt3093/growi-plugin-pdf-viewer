@@ -364,27 +364,6 @@ export function createInlineViewer({
     container.appendChild(iframe);
   }
 
-  // A first failure could just as easily be a transient network blip as a
-  // persistent CORS block — fetch() can't tell script code which one
-  // happened — so it's offered a cheap retry before assuming the worst.
-  function showRetryPrompt(status: HTMLDivElement): void {
-    status.replaceChildren();
-
-    const message = document.createElement('div');
-    message.textContent = 'PDFを読み込めませんでした。';
-    status.appendChild(message);
-
-    const retryBtn = document.createElement('button');
-    retryBtn.type = 'button';
-    retryBtn.className = 'gpv-retry-btn';
-    retryBtn.textContent = '再試行';
-    retryBtn.addEventListener('click', () => {
-      status.textContent = '読み込み中…';
-      void attemptLoad(status);
-    });
-    status.appendChild(retryBtn);
-  }
-
   async function attemptLoad(status: HTMLDivElement): Promise<void> {
     if (loadingTask) {
       destroyLoadingTaskAsync(loadingTask);
@@ -459,7 +438,14 @@ export function createInlineViewer({
       if (loadAttempts >= 2) {
         showFallback(status);
       } else {
-        showRetryPrompt(status);
+        // Retried silently rather than surfacing a "failed, click to
+        // retry" prompt: on a host with a persistent block (e.g. GROWI
+        // Cloud's CORS issue), every single open would otherwise show a
+        // scary failure message before an extra click reaches the working
+        // fallback. A transient blip is fixed without the user noticing
+        // anything went wrong; a persistent failure just takes one extra
+        // silent attempt before falling back.
+        void attemptLoad(status);
       }
     }
   }
