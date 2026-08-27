@@ -6,6 +6,13 @@ const ZOOM_STEPS = [0.6, 0.8, 1.0, 1.25, 1.5, 2.0];
 const DEFAULT_ZOOM_INDEX = 2;
 const CURRENT_PAGE_THRESHOLD = 0.5;
 const SVG_NS = 'http://www.w3.org/2000/svg';
+// How close a page needs to be before it's (re-)rendered.
+const RENDER_ROOT_MARGIN_PX = 400;
+// How far a page needs to be before its canvas/text-layer are torn down to
+// free memory (deliberately much larger than the render margin — see the
+// comment on the unload observer for why a single shared margin doesn't
+// work).
+const UNLOAD_ROOT_MARGIN_PX = 3000;
 // Matches .gpv-inline-viewer's opacity/transform transition duration; used
 // as a fallback removal timer in case transitionend doesn't fire.
 const CLOSE_TRANSITION_MS = 260;
@@ -126,6 +133,7 @@ export function createInlineViewer({
   let loadingTask: PDFDocumentLoadingTask | null = null;
   let pdfDoc: PDFDocumentProxy | null = null;
   let observer: IntersectionObserver | null = null;
+  let unloadObserver: IntersectionObserver | null = null;
   let resizeHandler: (() => void) | null = null;
   let baseUnscaledWidth = 0;
   let baseUnscaledHeight = 0;
@@ -254,6 +262,15 @@ export function createInlineViewer({
     });
   }
 
+  function createPageSpinner(): HTMLDivElement {
+    // Shown whenever a page has no canvas yet (either never rendered, or
+    // unloaded again after scrolling far away) so it doesn't read as a
+    // blank/broken area while scrolling.
+    const spinner = document.createElement('div');
+    spinner.className = 'gpv-page-spinner';
+    return spinner;
+  }
+
   async function renderPage(pageNum: number): Promise<void> {
     const entry = pages.get(pageNum);
     if (!entry || !pdfDoc || !container) return;
@@ -315,6 +332,40 @@ export function createInlineViewer({
       if (pdfDoc && intersectionEntry.intersectionRatio >= CURRENT_PAGE_THRESHOLD) {
         updatePageIndicator(pageNum, pdfDoc.numPages);
       }
+    });
+  }
+
+  // Frees a rendered page's canvas/text-layer once it's scrolled far away,
+  // so opening a long document and reading through it doesn't accumulate
+  // one full-resolution canvas per page for as long as the viewer stays
+  // open (a 300-page document at default zoom is on the order of a
+  // gigabyte of canvas backing store if nothing is ever freed). The
+  // placeholder keeps its already-measured height, so nothing shifts; the
+  // render observer keeps watching it and re-renders on its own the next
+  // time it scrolls back into range, exactly like a page that was never
+  // rendered in the first place.
+  function unloadPage(pageNum: number): void {
+    const entry = pages.get(pageNum);
+    if (!entry || !entry.rendered) return;
+
+    entry.renderTask?.cancel();
+    entry.renderTask = null;
+    entry.canvas?.remove();
+    entry.canvas = null;
+    entry.textLayerEl?.remove();
+    entry.textLayerEl = null;
+    entry.rendered = false;
+
+    entry.placeholder.replaceChildren(createPageSpinner());
+  }
+
+  function handleUnloadIntersect(entries: IntersectionObserverEntry[]): void {
+    entries.forEach((intersectionEntry) => {
+      // Still within the (much larger) unload margin — leave it loaded.
+      if (intersectionEntry.isIntersecting) return;
+      const pageNum = Number((intersectionEntry.target as HTMLElement).dataset.gpvPage);
+      if (!pageNum) return;
+      unloadPage(pageNum);
     });
   }
 
@@ -428,12 +479,7 @@ export function createInlineViewer({
         placeholder.className = 'gpv-page-placeholder';
         placeholder.dataset.gpvPage = String(n);
         placeholder.setAttribute('aria-label', `ページ ${n}`);
-        // Shown until renderPage() clears it and inserts the canvas, so a
-        // page waiting for IntersectionObserver to reach it doesn't read as
-        // a blank/broken area while scrolling.
-        const spinner = document.createElement('div');
-        spinner.className = 'gpv-page-spinner';
-        placeholder.appendChild(spinner);
+        placeholder.appendChild(createPageSpinner());
         pagesEl.appendChild(placeholder);
         pages.set(n, { placeholder, canvas: null, textLayerEl: null, renderTask: null, rendered: false });
       }
@@ -444,10 +490,23 @@ export function createInlineViewer({
 
       observer = new IntersectionObserver(handleIntersect, {
         root: null,
-        rootMargin: '400px 0px',
+        rootMargin: `${RENDER_ROOT_MARGIN_PX}px 0px`,
         threshold: [0, CURRENT_PAGE_THRESHOLD],
       });
       pages.forEach((entry) => observer?.observe(entry.placeholder));
+
+      // Separate observer with a much larger margin (rather than reusing
+      // the render observer's own "not intersecting" transitions): sharing
+      // one margin for both render and unload would unload a page the
+      // instant it left the 400px render zone, and scrolling back and
+      // forth near that boundary would thrash render/unload/render on
+      // every crossing. The large gap between the two margins is a dead
+      // zone where scrolling doesn't trigger either action.
+      unloadObserver = new IntersectionObserver(handleUnloadIntersect, {
+        root: null,
+        rootMargin: `${UNLOAD_ROOT_MARGIN_PX}px 0px`,
+      });
+      pages.forEach((entry) => unloadObserver?.observe(entry.placeholder));
 
       resizeHandler = debounce(() => {
         if (!container) return;
@@ -509,6 +568,8 @@ export function createInlineViewer({
   function collapse(): void {
     observer?.disconnect();
     observer = null;
+    unloadObserver?.disconnect();
+    unloadObserver = null;
 
     if (resizeHandler) {
       window.removeEventListener('resize', resizeHandler);
