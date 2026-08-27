@@ -117,7 +117,7 @@ growi-plugin-pdf-viewer/
 ### `createInlineViewer({ url, title, anchorEl })`（`src/inlineViewer.ts`）
 
 - **ツールバー**: タイトル表示、ページインジケータ、ページ番号入力＋移動アイコン、ズーム（縮小/％/拡大）、
-  ダウンロード、閉じる、を全て**アイコンボタン**（`.gpv-btn` = 28×28px、`title`/`aria-label` でツールチップ兼
+  ダウンロード、閉じる、を全て**アイコンボタン**（`.gpv-btn` = 34×34px、`title`/`aria-label` でツールチップ兼
   アクセシブルネームを付与）で統一している。可視テキストが「移動」「ダウンロード」等の日本語と
   トグルボタンの英語（`View PDF`）で混在するのを避けるため、テキストラベル自体を無くしアイコンのみにした。
   アイコンは `createStrokeIcon()`（16×16, `stroke="currentColor"`）ベースの小さなヘルパー群
@@ -143,7 +143,7 @@ growi-plugin-pdf-viewer/
      `読み込み中… N%` を反映しながら `.promise` を待つ（後述: `getDocument(url)` のように文字列を直接渡す
      呼び方は v6 の型では通らない）
   3. 1 ページ目を取得して `scale: 1` の `viewport` からページの基準サイズ（`baseUnscaledWidth/Height`）を求める
-     （全ページ同一サイズという前提。異なる場合はページごとにサイズが揃わない可能性があるが未対応）
+     （全ページ同一サイズという前提でレイアウトする）
   4. 全ページ分の空プレースホルダー `div.gpv-page-placeholder` を並べ、高さだけ先に確保する
   5. `IntersectionObserver`（`rootMargin: '400px 0px'`, `threshold: [0, 0.5]`）で各プレースホルダーを監視
   6. `resize` はデバウンスして再レイアウト＋描画済みページの再描画を行う
