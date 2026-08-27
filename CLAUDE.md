@@ -81,6 +81,10 @@ growi-plugin-pdf-viewer/
 - **`enhanceLink(link)`**: リンクに `gpv-pdf-link` クラスと SVG アイコン（`createElementNS` で生成、`innerHTML`
   不使用）を追加し、トグルボタンを挿入する。リンク自体のクリックは `preventDefault` して
   トグルボタンのクリックに委譲する（ダウンロード/別タブ遷移をさせないため）。
+  `createPdfIcon()` は Wikimedia Commons の「PDF icon.svg」を参考にした、折れ角付きの白い書類＋中央下寄りの
+  赤いリボン帯＋白抜き「PDF」文字のデザイン（参照元は文字をパス化した図形だが、本実装では単純に `<text>`
+  要素で代用しシンプル化している）。書類部分の塗り/線は `var(--gpv-bg)`/`var(--gpv-border)` を使い、ダーク
+  モードで白い正方形が浮かないようにテーマに追従させている。赤帯（`var(--gpv-pdf-badge)`）は固定色。
   トグルボタン自体も `createPdfIcon()`（`.gpv-toggle-icon`）＋ `span.gpv-toggle-label`（初期値 `View PDF`）の
   子要素構成にしている。ラベルは開閉のたびに丸ごと差し替えるのではなく `setToggleLabel()` が
   `.gpv-toggle-label` の `textContent` だけを更新するので、アイコンを毎回作り直さずに済む。ボタン文言は

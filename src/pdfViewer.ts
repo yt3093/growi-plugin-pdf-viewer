@@ -46,11 +46,16 @@ function isInEditorDOM(el: Element): boolean {
 
 // ---- icon ----
 
-// Rounded-badge "PDF" logotype rather than a literal folded-page silhouette:
-// at the ~14-16px this renders at inline/in-button, a small page outline
-// with the label squeezed into a corner ribbon becomes illegible, whereas
-// dedicating the whole icon area to the badge keeps "PDF" readable down to
-// real usage size.
+// Adapted from the well-known Wikimedia Commons "PDF icon.svg"
+// (https://upload.wikimedia.org/wikipedia/commons/6/6c/PDF_icon.svg):
+// a page silhouette with a folded top-right corner, banded by a red
+// ribbon carrying the "PDF" label. The original renders that label as
+// traced letter paths at a large native size; reproducing that path data
+// isn't necessary (and wouldn't stay legible at our ~16px usage size), so
+// the label is a plain <text> here — same visual language, far less
+// markup. Page fill/stroke use theme variables (not fixed white) so the
+// icon doesn't read as a stark white square against a dark background;
+// the red band stays a fixed color since white-on-red needs no theming.
 function createPdfIcon(): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 16 16');
@@ -59,30 +64,36 @@ function createPdfIcon(): SVGSVGElement {
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('gpv-pdf-icon');
 
-  const badge = document.createElementNS(SVG_NS, 'rect');
-  badge.setAttribute('x', '1');
-  badge.setAttribute('y', '2');
-  badge.setAttribute('width', '14');
-  badge.setAttribute('height', '12');
-  badge.setAttribute('rx', '2.2');
-  badge.setAttribute('fill', 'var(--gpv-pdf-badge)');
-  svg.appendChild(badge);
+  const page = document.createElementNS(SVG_NS, 'path');
+  page.setAttribute('d', 'M4 1h5l3 3v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z');
+  page.setAttribute('fill', 'var(--gpv-bg)');
+  page.setAttribute('stroke', 'var(--gpv-border)');
+  page.setAttribute('stroke-width', '1');
+  svg.appendChild(page);
 
   const fold = document.createElementNS(SVG_NS, 'path');
-  fold.setAttribute('d', 'M11.5 2v2.6a1 1 0 0 0 1 1H15');
-  fold.setAttribute('fill', 'none');
-  fold.setAttribute('stroke', 'var(--gpv-pdf-badge-fold)');
-  fold.setAttribute('stroke-width', '1');
+  fold.setAttribute('d', 'M9 1v3h3z');
+  fold.setAttribute('fill', 'var(--gpv-toolbar-bg)');
+  fold.setAttribute('stroke', 'var(--gpv-border)');
+  fold.setAttribute('stroke-width', '0.6');
   svg.appendChild(fold);
+
+  const band = document.createElementNS(SVG_NS, 'rect');
+  band.setAttribute('x', '2.3');
+  band.setAttribute('y', '8.7');
+  band.setAttribute('width', '11.4');
+  band.setAttribute('height', '3.5');
+  band.setAttribute('fill', 'var(--gpv-pdf-badge)');
+  svg.appendChild(band);
 
   const label = document.createElementNS(SVG_NS, 'text');
   label.setAttribute('x', '8');
-  label.setAttribute('y', '10.6');
+  label.setAttribute('y', '11.35');
   label.setAttribute('text-anchor', 'middle');
   label.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
-  label.setAttribute('font-size', '5.4');
+  label.setAttribute('font-size', '3.3');
   label.setAttribute('font-weight', '800');
-  label.setAttribute('letter-spacing', '-0.3');
+  label.setAttribute('letter-spacing', '-0.1');
   label.setAttribute('fill', '#fff');
   label.textContent = 'PDF';
   svg.appendChild(label);
