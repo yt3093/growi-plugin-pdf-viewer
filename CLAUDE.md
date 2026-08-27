@@ -81,10 +81,19 @@ growi-plugin-pdf-viewer/
 - **`enhanceLink(link)`**: リンクに `gpv-pdf-link` クラスと SVG アイコン（`createElementNS` で生成、`innerHTML`
   不使用）を追加し、トグルボタンを挿入する。リンク自体のクリックは `preventDefault` して
   トグルボタンのクリックに委譲する（ダウンロード/別タブ遷移をさせないため）。
-  `createPdfIcon()` は Wikimedia Commons の「PDF icon.svg」を参考にした、折れ角付きの白い書類＋中央下寄りの
-  赤いリボン帯＋白抜き「PDF」文字のデザイン（参照元は文字をパス化した図形だが、本実装では単純に `<text>`
-  要素で代用しシンプル化している）。書類部分の塗り/線は `var(--gpv-bg)`/`var(--gpv-border)` を使い、ダーク
-  モードで白い正方形が浮かないようにテーマに追従させている。赤帯（`var(--gpv-pdf-badge)`）は固定色。
+  `createPdfIcon()` は [Wikimedia Commons の「PDF icon.svg」]
+  (https://upload.wikimedia.org/wikipedia/commons/6/6c/PDF_icon.svg) の座標をそのまま踏襲した再現。
+  折れ角付きの白い書類＋両端がノッチ状に切り欠かれた赤いリボン帯（単純な矩形ではない）＋白抜き「PDF」文字。
+  参照元は `viewBox="0 0 14 16"` の座標に `matrix(.04589 0 0 .04589 -.66877 -.73379)` という transform が
+  掛かった生データ（Illustrator/Inkscape 由来と思われる、`fill` のみで縁取りを表現する二重パス等の複雑な
+  構造）だったため、その transform を手計算で適用した座標値を使い、書類の輪郭（`M8.87 0H1.34v16h11.33V3.8z`）
+  とリボン帯（`polygon points="13.6,12.3 0.4,12.3 0.4,7.0 1.0,6.3 1.0,7.1 13.0,7.1 13.0,6.3 13.6,7.0"`）を
+  シンプルな `fill`+`stroke` で再構成している（見た目は同一、マークアップは大幅に単純）。唯一の意図的な
+  差分は「PDF」の文字部分で、参照元は文字を輪郭パス化した図形だが、本実装では単純に `<text>` 要素で代用して
+  いる（3 文字分のグリフパスを持つ必要はなく、この 16px 程度の使用サイズでは見た目上の違いも出ない）。
+  書類部分の塗り/線は `var(--gpv-bg)`/`var(--gpv-border)` を使い、ダークモードで白い正方形が浮かないように
+  テーマに追従させている。赤帯（`var(--gpv-pdf-badge)`）は固定色。`viewBox` は元データに合わせて
+  `0 0 14 16`（正方形ではない）にしており、`width`/`height` もそれぞれ `14`/`16` を指定している。
   トグルボタン自体も `createPdfIcon()`（`.gpv-toggle-icon`）＋ `span.gpv-toggle-label`（初期値 `View PDF`）の
   子要素構成にしている。ラベルは開閉のたびに丸ごと差し替えるのではなく `setToggleLabel()` が
   `.gpv-toggle-label` の `textContent` だけを更新するので、アイコンを毎回作り直さずに済む。ボタン文言は
